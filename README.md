@@ -9,10 +9,12 @@ surfaced, and a direct ownership-side leasing contact.
 
 ```
 python scrape_gfp.py         # 1a. scrape GFP Real Estate   -> gfp_listings.csv
-python scrape_rudin.py       # 1b. scrape Rudin Management  -> rudin_listings.csv
-python clean_dataset.py      # 2.  merge/parse/flag/geocode -> spaces_clean.csv
+python scrape_rudin.py       # 1b. scrape Rudin Management   -> rudin_listings.csv
+python scrape_slgreen.py     # 1c. scrape SL Green           -> slgreen_listings.csv
+python clean_dataset.py      # 2.  merge + PLUTO enrichment  -> spaces_clean.csv
 python demo_match.py         # 3.  rank spaces for example tenant requests
-python -m uvicorn app:app    # 4.  full product at http://127.0.0.1:8000
+python test_engine.py        # 4.  9 design-decision tests must pass
+python -m uvicorn app:app    # 5.  full product at http://127.0.0.1:8000
 ```
 
 Requires: `python -m pip install -r requirements.txt`
@@ -25,15 +27,17 @@ Optional (real semantic matching): `python -m pip install sentence-transformers`
 | `scrape_gfp.py` | Scraper for gfpre.com. Hybrid: one call to their JSON API (`/api/property`) for all 59 buildings + 135 availabilities, then BeautifulSoup on each building page for the description + contacts (which ARE in the raw HTML — the availabilities table is not, it's JS-rendered from that API). |
 | `gfp_listings.csv` | Raw scrape output. One row per available space; buildings with no availabilities keep one row with space fields blank. |
 | `building_coords.json` | `slug -> [lng, lat]` for every building, taken from the same API (`mapbox_center`) — saved a whole geocoding step. |
-| `clean_dataset.py` | Data engineering: parses `"$40.00 PSF"` -> `40.0` (never guesses when rent is "Upon request"), flags leased/placeholder rows, tags residential buildings, assigns boroughs, merges coordinates. |
-| `spaces_clean.csv` | The engine's input. 161 rows, 130 flagged `is_available`. |
+| `clean_dataset.py` | Data engineering: parses `"$40.00 PSF"` -> `40.0` (never guesses when rent is "Upon request"), flags leased/placeholder rows, tags residential buildings, assigns boroughs, merges coordinates, and **joins NYC PLUTO by normalized address** (never by owner name — 95.2% of PLUTO owner strings own exactly one building). PLUTO supplies lat/lng where scrapers can't, plus year built / floors / building class. Address normalization handles PLUTO's format: "Eighth Avenue" -> "8 AVENUE", "53rd" -> "53", "One" -> "1". 57/101 buildings match; misses are mostly corner lots keyed by their other frontage (fix would be the NYC GeoSearch API — future work). |
+| `spaces_clean.csv` | The engine's input. 457 rows across 3 landlords (101 buildings), 406 flagged `is_available`, enriched with PLUTO year built / floors / building class. |
 | `semantic.py` | The "match by meaning" layer. Uses sentence-transformers embeddings + cosine similarity when installed; otherwise falls back to a from-scratch TF-IDF (keyword-weight) implementation so the pipeline always runs. |
 | `matching.py` | The engine. Five signals, each 0..1: type, size, budget, geo (haversine distance to the requested area), semantic. Blended with explicit weights into one score. |
 | `demo_match.py` | Three realistic tenant personas run end-to-end. |
 | `scrape_rudin.py` | Scraper for rudin.com — the OPPOSITE architecture of GFP: fully server-rendered Drupal pages (paginated `/all-availabilities`), but no public emails (contact recorded honestly as the inquire-form link) and no rents. Building coordinates are embedded in each page (highest-precision pair = the map pin; the 6-decimal pair is their HQ footer map). |
 | `landlord.py` | Layer 3 — rolls space scores up to a landlord ranking on five countable signals: quality (mean of top-3 space scores), depth (# of fitting spaces), area presence, type specialization, semantic fit. A relevance score, never a prediction. |
 | `app.py` | FastAPI wrapper: `/api/match`, `/api/landlords`, `/api/areas`, auto-docs at `/docs`, serves the UI at `/`. |
-| `static/index.html` | The tenant-facing single-file frontend: search form, ranked space cards with per-signal score bars, landlord panel. |
+| `static/index.html` | The tenant-facing single-file frontend: search form, ranked space cards with per-signal score bars, landlord panel, and a Leaflet results map with numbered pins. |
+| `scrape_slgreen.py` | Scraper for slgreen.com (landlord #3, WordPress/Divi) — the richest source: 224 units with rent/term/occupancy, real @slgreen.com leasing contacts (C&W brokers filtered out per the ownership-side rule). Quirks: units render 3x (desktop/mobile/details) and must be deduped; ~35 of the 66 dropdown entries are external marketing sites and are skipped; no coordinates (PLUTO supplies them). |
+| `test_engine.py` | 9 tests that pin down design decisions (neutral scores for unknowns, NaN-safe geo, descending order, landlord aggregation invariants). Run with `python test_engine.py` or pytest. |
 
 ## How the scoring works
 
@@ -79,8 +83,12 @@ can't explain is a ranking you can't defend.
 ## Roadmap position
 
 Done: PLUTO backbone → GFP scraper → clean dataset → matching v1 (structured +
-geo) → semantic layer (with fallback) → Rudin scraper (landlord #2, 68 spaces)
-→ landlord ranking (Layer 3) → FastAPI backend + frontend (runs locally).
-Next: deploy to a live URL, more owner-operator scrapers (Silverstein, SL
-Green...), install sentence-transformers for real embeddings. Bonus: price
-model.
+geo) → semantic layer (with fallback) → Rudin scraper (68 spaces) → landlord
+ranking (Layer 3) → FastAPI backend + frontend → **DEPLOYED LIVE at
+https://spacerank-nyc.vercel.app** → SL Green scraper (224 units — dataset now
+406 available spaces / 3 landlords / 101 buildings) → PLUTO enrichment joined
+by address → results map → test suite. (Scouted Silverstein too: their site
+is a portfolio brochure with no availabilities or contacts — documented dead
+end.) The deployed instance runs the TF-IDF semantic backend (embeddings are
+too heavy for serverless). Next: install sentence-transformers locally for
+real embeddings, more landlords (Vornado, Durst...). Bonus: price model.

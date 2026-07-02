@@ -140,6 +140,8 @@ def score_geo(lat, lng, area):
     target = AREAS.get(area.strip().lower())
     if target is None:
         return 0.5, f"unknown area '{area}'", None
+    if lat != lat or lng != lng:                 # NaN: building not geocoded
+        return 0.5, "location unknown", None
     d = haversine_km(lat, lng, target[0], target[1])
     score = 1.0 if d <= 0.5 else max(0.0, 1 - (d - 0.5) / 7.5)
     return score, f"{d:.1f} km from {area}", d
@@ -186,6 +188,9 @@ def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None)
                         if isinstance(row["contact_email"], str) and row["contact_email"]
                         else str(row["contact_name"] or "")),
             "url": row["source_url"],
+            "lat": None if row["lat"] != row["lat"] else row["lat"],
+            "lng": None if row["lng"] != row["lng"] else row["lng"],
+            "year_built": None if row.get("year_built", float("nan")) != row.get("year_built", float("nan")) else int(row["year_built"]),
             "reason": f"{r_type}; {r_size}; {r_budg}; {r_geo}; description match {sem:.2f}",
             "signals": {"type": s_type, "size": s_size, "budget": s_budg,
                         "geo": s_geo, "semantic": round(sem, 3)},

@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SpaceRank NYC — find your space, meet your landlord</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-  /* ---- design tokens ---------------------------------------------------- */
   :root {
     --ink: #14213d; --ink-soft: #4a5568; --paper: #f7f7f5; --card: #ffffff;
     --accent: #0f6fff; --accent-soft: #e8f1ff; --good: #16a34a; --line: #e5e7eb;
@@ -15,12 +15,10 @@
          color: var(--ink); line-height: 1.45; }
   .wrap { max-width: 1060px; margin: 0 auto; padding: 28px 20px 80px; }
 
-  /* ---- header ----------------------------------------------------------- */
   header h1 { font-size: 1.9rem; letter-spacing: -0.5px; }
   header h1 span { color: var(--accent); }
   header p  { color: var(--ink-soft); margin-top: 4px; }
 
-  /* ---- search form ------------------------------------------------------ */
   form { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
          padding: 18px; margin-top: 22px; display: grid; gap: 14px;
          grid-template-columns: repeat(6, 1fr); }
@@ -39,7 +37,9 @@
            cursor: pointer; }
   button:hover { filter: brightness(1.08); }
 
-  /* ---- results ---------------------------------------------------------- */
+  #map { height: 340px; border-radius: 14px; border: 1px solid var(--line);
+         margin-top: 22px; display: none; }
+
   .cols { display: grid; grid-template-columns: 1.7fr 1fr; gap: 22px; margin-top: 26px; }
   h2 { font-size: 1.05rem; margin-bottom: 10px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
@@ -65,6 +65,9 @@
   .ll-card .row1 .bname { font-size: 1.02rem; }
   .empty { color: var(--ink-soft); padding: 24px 4px; }
   .foot { margin-top: 34px; font-size: 0.78rem; color: var(--ink-soft); }
+  .num { display: inline-block; background: var(--accent); color: #fff; font-weight: 700;
+         border-radius: 50%; width: 20px; height: 20px; text-align: center;
+         font-size: 0.78rem; line-height: 20px; margin-right: 6px; }
   @media (max-width: 860px) {
     form { grid-template-columns: repeat(2, 1fr); }
     .f-type, .f-area, .f-desc, .f-go { grid-column: span 2; }
@@ -110,6 +113,8 @@
     <div class="field f-go"><button type="submit">Rank spaces</button></div>
   </form>
 
+  <div id="map"></div>
+
   <div class="cols">
     <section>
       <h2>Top spaces</h2>
@@ -121,11 +126,12 @@
     </section>
   </div>
 
-  <p class="foot">Data scraped from owner-operator websites (GFP Real Estate, Rudin Management).
-     Scores are transparent relevance rankings on real signals — never invented metrics.
-     <span id="backend"></span></p>
+  <p class="foot">Data scraped from owner-operator websites (GFP Real Estate, Rudin Management,
+     SL Green) and enriched with NYC PLUTO. Scores are transparent relevance rankings on real
+     signals — never invented metrics. <span id="backend"></span></p>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 
@@ -157,18 +163,20 @@ function signalBars(sig) {
   ).join("") + `</div>`;
 }
 
-function spaceCard(r) {
+function spaceCard(r, i) {
   const mail = r.contact.match(/<(.+)>/);
   const who = mail
     ? `${r.contact.split("<")[0].trim()} — <a href="mailto:${mail[1]}">${mail[1]}</a>`
     : `${r.contact} — <a href="${r.url}" target="_blank" rel="noopener">inquire via site</a>`;
+  const built = r.year_built ? `<span>built ${r.year_built}</span>` : "";
   return `<div class="card">
     <div class="row1">
-      <div><span class="bname">${r.building}</span><br><span class="suite">${r.suite}</span></div>
+      <div><span class="num">${i + 1}</span><span class="bname">${r.building}</span><br>
+           <span class="suite">${r.suite}</span></div>
       <span class="badge">${r.score}</span>
     </div>
     <div class="meta"><span>${fmt(r.size_sqft)} sf</span><span>${r.rent || "rent on request"}</span>
-      <span>${r.borough}</span><span>${r.landlord}</span></div>
+      ${built}<span>${r.borough}</span><span>${r.landlord}</span></div>
     ${signalBars(r.signals)}
     <div class="why">${r.reason}</div>
     <div class="contact">${who} · <a href="${r.url}" target="_blank" rel="noopener">listing ↗</a></div>
@@ -186,6 +194,36 @@ function landlordCard(r) {
   </div>`;
 }
 
+/* ---- the map: one numbered pin per ranked space ---- */
+let map = null, markerLayer = null;
+function drawMap(results) {
+  const pts = results.filter(r => r.lat && r.lng);
+  const el = $("map");
+  if (!pts.length) { el.style.display = "none"; return; }
+  el.style.display = "block";
+  if (!map) {
+    map = L.map("map");
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
+    markerLayer = L.layerGroup().addTo(map);
+  }
+  markerLayer.clearLayers();
+  const bounds = [];
+  results.forEach((r, i) => {
+    if (!r.lat || !r.lng) return;
+    const icon = L.divIcon({ className: "", iconSize: [24, 24],
+      html: `<div style="background:#0f6fff;color:#fff;font-weight:700;border-radius:50%;
+                    width:24px;height:24px;text-align:center;line-height:24px;
+                    box-shadow:0 1px 4px rgba(0,0,0,.4)">${i + 1}</div>` });
+    L.marker([r.lat, r.lng], { icon })
+      .bindPopup(`<b>${r.building}</b><br>${r.suite}<br>score ${r.score}`)
+      .addTo(markerLayer);
+    bounds.push([r.lat, r.lng]);
+  });
+  map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+  setTimeout(() => map.invalidateSize(), 100);
+}
+
 $("f").addEventListener("submit", async e => {
   e.preventDefault();
   $("spaces").innerHTML = $("landlords").innerHTML = `<div class="empty">Ranking…</div>`;
@@ -196,6 +234,7 @@ $("f").addEventListener("submit", async e => {
   ]);
   $("spaces").innerHTML   = m.results.map(spaceCard).join("") || `<div class="empty">No matches.</div>`;
   $("landlords").innerHTML = l.results.map(landlordCard).join("") || `<div class="empty">No landlords.</div>`;
+  drawMap(m.results);
 });
 </script>
 </body>
