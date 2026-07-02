@@ -1,0 +1,9 @@
+# SpaceRank NYC — install with:  python -m pip install -r requirements.txt
+requests
+beautifulsoup4
+lxml
+pandas
+fastapi
+uvicorn
+# optional but recommended — enables real semantic matching (large download):
+# sentence-transformers

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpaceRank NYC — find your space, meet your landlord</title>
+<style>
+  /* ---- design tokens ---------------------------------------------------- */
+  :root {
+    --ink: #14213d; --ink-soft: #4a5568; --paper: #f7f7f5; --card: #ffffff;
+    --accent: #0f6fff; --accent-soft: #e8f1ff; --good: #16a34a; --line: #e5e7eb;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; background: var(--paper);
+         color: var(--ink); line-height: 1.45; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 28px 20px 80px; }
+
+  /* ---- header ----------------------------------------------------------- */
+  header h1 { font-size: 1.9rem; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  header p  { color: var(--ink-soft); margin-top: 4px; }
+
+  /* ---- search form ------------------------------------------------------ */
+  form { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+         padding: 18px; margin-top: 22px; display: grid; gap: 14px;
+         grid-template-columns: repeat(6, 1fr); }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .f-type { grid-column: span 2; } .f-area { grid-column: span 2; }
+  .f-min, .f-max, .f-budget { grid-column: span 1; }
+  .f-desc { grid-column: span 5; } .f-go { grid-column: span 1; align-self: end; }
+  label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+          letter-spacing: 0.06em; color: var(--ink-soft); }
+  input, select, textarea, button {
+    font: inherit; padding: 9px 10px; border: 1px solid var(--line);
+    border-radius: 8px; background: #fff; width: 100%;
+  }
+  textarea { resize: vertical; min-height: 42px; }
+  button { background: var(--accent); color: #fff; border: none; font-weight: 600;
+           cursor: pointer; }
+  button:hover { filter: brightness(1.08); }
+
+  /* ---- results ---------------------------------------------------------- */
+  .cols { display: grid; grid-template-columns: 1.7fr 1fr; gap: 22px; margin-top: 26px; }
+  h2 { font-size: 1.05rem; margin-bottom: 10px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+          padding: 14px 16px; margin-bottom: 12px; }
+  .row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .bname { font-weight: 700; }
+  .suite { color: var(--ink-soft); font-size: 0.92rem; }
+  .badge { background: var(--accent-soft); color: var(--accent); font-weight: 700;
+           border-radius: 8px; padding: 3px 9px; white-space: nowrap; }
+  .meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.88rem;
+          color: var(--ink-soft); margin-top: 6px; }
+  .why { font-size: 0.85rem; color: var(--ink-soft); margin-top: 8px;
+         border-top: 1px dashed var(--line); padding-top: 8px; }
+  .contact { font-size: 0.88rem; margin-top: 8px; }
+  .contact a { color: var(--accent); text-decoration: none; }
+  .bars { display: flex; gap: 5px; margin-top: 9px; }
+  .bar { flex: 1; }
+  .bar i { display: block; height: 5px; border-radius: 3px; background: var(--line);
+           position: relative; overflow: hidden; }
+  .bar i b { position: absolute; inset: 0; width: var(--w); background: var(--accent);
+             border-radius: 3px; }
+  .bar span { font-size: 0.62rem; color: var(--ink-soft); text-transform: uppercase; }
+  .ll-card .row1 .bname { font-size: 1.02rem; }
+  .empty { color: var(--ink-soft); padding: 24px 4px; }
+  .foot { margin-top: 34px; font-size: 0.78rem; color: var(--ink-soft); }
+  @media (max-width: 860px) {
+    form { grid-template-columns: repeat(2, 1fr); }
+    .f-type, .f-area, .f-desc, .f-go { grid-column: span 2; }
+    .cols { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Space<span>Rank</span> NYC</h1>
+    <p>Describe what you need — get the best-fitting spaces and the landlords behind them, ranked and explained.</p>
+  </header>
+
+  <form id="f">
+    <div class="field f-type">
+      <label for="type">Space type</label>
+      <select id="type">
+        <option>Office</option><option>Retail</option><option>Showroom</option>
+        <option>Life Science</option>
+      </select>
+    </div>
+    <div class="field f-area">
+      <label for="area">Preferred area</label>
+      <select id="area"><option value="">Anywhere in NYC</option></select>
+    </div>
+    <div class="field f-min">
+      <label for="smin">Min sq ft</label>
+      <input id="smin" type="number" min="0" placeholder="2000">
+    </div>
+    <div class="field f-max">
+      <label for="smax">Max sq ft</label>
+      <input id="smax" type="number" min="0" placeholder="6000">
+    </div>
+    <div class="field f-budget">
+      <label for="budget">Budget $/SF/yr</label>
+      <input id="budget" type="number" min="0" placeholder="55">
+    </div>
+    <div class="field f-desc">
+      <label for="q">Describe your ideal space (free text — this is the semantic part)</label>
+      <textarea id="q" placeholder="e.g. bright loft with exposed brick, strong foot traffic, near luxury retail…"></textarea>
+    </div>
+    <div class="field f-go"><button type="submit">Rank spaces</button></div>
+  </form>
+
+  <div class="cols">
+    <section>
+      <h2>Top spaces</h2>
+      <div id="spaces"><div class="empty">Run a search to see ranked spaces.</div></div>
+    </section>
+    <section>
+      <h2>Top landlords</h2>
+      <div id="landlords"><div class="empty">Landlord ranking appears here.</div></div>
+    </section>
+  </div>
+
+  <p class="foot">Data scraped from owner-operator websites (GFP Real Estate, Rudin Management).
+     Scores are transparent relevance rankings on real signals — never invented metrics.
+     <span id="backend"></span></p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+/* populate the area dropdown from the API so UI and engine never drift */
+fetch("/api/areas").then(r => r.json()).then(d => {
+  for (const a of d.areas) {
+    const o = document.createElement("option");
+    o.value = a; o.textContent = a.replace(/\b\w/g, c => c.toUpperCase());
+    $("area").appendChild(o);
+  }
+  $("backend").textContent = "Semantic backend: " + d.semantic_backend + ".";
+});
+
+function params() {
+  const p = new URLSearchParams({ property_type: $("type").value, q: $("q").value });
+  if ($("smin").value)   p.set("size_min", $("smin").value);
+  if ($("smax").value)   p.set("size_max", $("smax").value);
+  if ($("budget").value) p.set("budget", $("budget").value);
+  if ($("area").value)   p.set("area", $("area").value);
+  return p;
+}
+
+const fmt = n => n && n === n ? Number(n).toLocaleString() : "n/a";
+
+function signalBars(sig) {
+  const order = ["type", "size", "budget", "geo", "semantic"];
+  return `<div class="bars">` + order.map(k =>
+    `<div class="bar"><i><b style="--w:${Math.round(100 * sig[k])}%"></b></i><span>${k}</span></div>`
+  ).join("") + `</div>`;
+}
+
+function spaceCard(r) {
+  const mail = r.contact.match(/<(.+)>/);
+  const who = mail
+    ? `${r.contact.split("<")[0].trim()} — <a href="mailto:${mail[1]}">${mail[1]}</a>`
+    : `${r.contact} — <a href="${r.url}" target="_blank" rel="noopener">inquire via site</a>`;
+  return `<div class="card">
+    <div class="row1">
+      <div><span class="bname">${r.building}</span><br><span class="suite">${r.suite}</span></div>
+      <span class="badge">${r.score}</span>
+    </div>
+    <div class="meta"><span>${fmt(r.size_sqft)} sf</span><span>${r.rent || "rent on request"}</span>
+      <span>${r.borough}</span><span>${r.landlord}</span></div>
+    ${signalBars(r.signals)}
+    <div class="why">${r.reason}</div>
+    <div class="contact">${who} · <a href="${r.url}" target="_blank" rel="noopener">listing ↗</a></div>
+  </div>`;
+}
+
+function landlordCard(r) {
+  const mail = r.contact.match(/<(.+)>/);
+  const who = mail ? `<a href="mailto:${mail[1]}">${mail[1]}</a>` : r.contact;
+  return `<div class="card ll-card">
+    <div class="row1"><span class="bname">${r.landlord}</span><span class="badge">${r.score}</span></div>
+    <div class="meta"><span>${r.n_fitting} fitting / ${r.n_available} available</span></div>
+    <div class="why">${r.reason}</div>
+    <div class="contact">Best: ${r.best_space}<br>Reach: ${who}</div>
+  </div>`;
+}
+
+$("f").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("spaces").innerHTML = $("landlords").innerHTML = `<div class="empty">Ranking…</div>`;
+  const p = params();
+  const [m, l] = await Promise.all([
+    fetch("/api/match?" + p).then(r => r.json()),
+    fetch("/api/landlords?" + p).then(r => r.json()),
+  ]);
+  $("spaces").innerHTML   = m.results.map(spaceCard).join("") || `<div class="empty">No matches.</div>`;
+  $("landlords").innerHTML = l.results.map(landlordCard).join("") || `<div class="empty">No landlords.</div>`;
+});
+</script>
+</body>
+</html>
