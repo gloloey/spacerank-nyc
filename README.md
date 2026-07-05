@@ -33,7 +33,7 @@ Optional (real semantic matching): `python -m pip install sentence-transformers`
 | `matching.py` | The engine. Five signals, each 0..1: type, size, budget, geo (haversine distance to the requested area), semantic. Blended with explicit weights into one score. |
 | `demo_match.py` | Three realistic tenant personas run end-to-end. |
 | `scrape_rudin.py` | Scraper for rudin.com — the OPPOSITE architecture of GFP: fully server-rendered Drupal pages (paginated `/all-availabilities`), but no public emails (contact recorded honestly as the inquire-form link) and no rents. Building coordinates are embedded in each page (highest-precision pair = the map pin; the 6-decimal pair is their HQ footer map). |
-| `landlord.py` | Layer 3 — rolls space scores up to a landlord ranking on five countable signals: quality (mean of top-3 space scores), depth (# of fitting spaces), area presence, type specialization, semantic fit. A relevance score, never a prediction. |
+| `landlord.py` | Layer 3 (v2) — ranks landlords on exactly THREE transparent signals (see 'How the landlord ranking works' below). No combined score is displayed; every number traces to real data. |
 | `app.py` | FastAPI wrapper: `/api/match`, `/api/landlords`, `/api/areas`, auto-docs at `/docs`, serves the UI at `/`. |
 | `static/index.html` | The tenant-facing single-file frontend: search form, ranked space cards with per-signal score bars, landlord panel, and a Leaflet results map with numbered pins. |
 | `scrape_slgreen.py` | Scraper for slgreen.com (landlord #3, WordPress/Divi) — the richest source: 224 units with rent/term/occupancy, real @slgreen.com leasing contacts (C&W brokers filtered out per the ownership-side rule). Quirks: units render 3x (desktop/mobile/details) and must be deduped; ~35 of the 66 dropdown entries are external marketing sites and are skipped; no coordinates (PLUTO supplies them). |
@@ -56,6 +56,18 @@ score = 0.20*type + 0.20*size + 0.15*budget + 0.25*geo + 0.20*semantic
 
 Every result carries its per-signal scores and a reason string — a ranking you
 can't explain is a ranking you can't defend.
+
+## How the landlord ranking works (v2 — three transparent signals)
+
+| signal | tenant label | what it is |
+|---|---|---|
+| `match_number` | **Spaces that fit you** | a COUNT: how many of the landlord's available spaces pass the tenant's HARD filters. Filter semantics: type strict; size strict (when a range is given); budget rejects only KNOWN rents above budget (92% of the market publishes "Upon request" — missing price ≠ bad price); area strict within 2 km, and an un-geocoded building FAILS (we never claim a location we can't verify). |
+| `specialization` | **Area & type expertise** | `(X/Y) × (X/(X+5))` where X = their available spaces of the requested area+type, Y = all their available spaces. The percentage, damped by the absolute count — so a 3-of-3 boutique (0.38) doesn't beat a 101-of-208 giant (0.46). Percentage alone is never used. |
+| `match_strength` | **Spaces match quality** | mean over their top-3 FITTING spaces of `0.25·size + 0.15·budget + 0.30·geo + 0.30·semantic`. The semantic part is cosine similarity between the tenant's free text and the descriptions (embeddings when sentence-transformers is installed, TF-IDF keyword overlap otherwise — the API reports which). The reason line quotes the matched phrase via `semantic.explain()`. If zero spaces fit, strength is `null` — reported, never faked. |
+
+List ordering (internal only, returned as `ordering`, not displayed):
+`0.40 · n/(n+10) + 0.25 · specialization + 0.35 · match_strength`.
+The saturation `n/(n+10)` gives diminishing returns instead of an arbitrary cap.
 
 ## Design decisions worth remembering
 

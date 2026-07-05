@@ -1,40 +1,106 @@
 """
-landlord.py — SpaceRank NYC: Layer 3, the landlord ranking
-==========================================================
-Answers "which LANDLORD is best for what this tenant wants?" by rolling
-space-level matches up to the landlord level.
+landlord.py — SpaceRank NYC: Layer 3, the landlord ranking (v2)
+===============================================================
+Ranks landlords on exactly THREE transparent signals. Every number traces
+back to real data; nothing is invented, nothing is double-counted, and the
+tenant sees each signal separately — there is deliberately NO combined
+percentage on display.
 
-IMPORTANT DESIGN POINT (from the project spec): this is a RELEVANCE score,
-not a prediction. We are not claiming to know a hidden truth like "how
-reliable is this landlord" — no ground truth exists for that. Every signal
-below is real and countable, and each result says exactly why it surfaced.
+THE THREE SIGNALS
+-----------------
+1. match_number  (a plain COUNT — tenant label: "Spaces that fit you")
+   How many of the landlord's currently-available spaces pass the tenant's
+   HARD filters. Filter semantics (deliberate, documented):
+     type    space's listed use must include the requested type   [strict]
+     size    if a range was given: size must be known AND inside  [strict]
+     budget  rejects only spaces with a KNOWN rent above budget — 92% of
+             the market publishes "Upon request", and a missing price is
+             not the same as a bad price                    [known-violation]
+     area    if an area was given: building must be geocoded AND within
+             AREA_RADIUS_KM of it. Unknown location FAILS — we will not
+             claim a building is "in SoHo" without knowing where it is
+                                                                   [strict]
 
-THE FIVE SIGNALS (each 0..1, weights explicit):
+2. specialization  (0-1 — tenant label: "Area & type expertise")
+   How concentrated the landlord's available portfolio is in the tenant's
+   area + type:  spec = (X/Y) x (X/(X+DAMP))
+   where X = their available spaces of that area+type, Y = all their
+   available spaces. The first factor is the percentage; the second damps
+   it when the absolute count is small, so a 3-of-3 boutique (1.00 x 0.38
+   = 0.38) does not beat a 101-of-208 giant (0.49 x 0.95 = 0.46).
+   Percentage alone is never used.
 
-  quality        how good are their best matches? (mean of top-3 space scores)
-  depth          how MANY currently-available spaces fit well? (score >= 60)
-  area presence  do they have buildings where the tenant wants to be?
-  specialization what share of their available portfolio is the wanted type?
-  semantic       how well do their descriptions match the tenant's free text?
+3. match_strength  (0-1 — tenant label: "Spaces match quality")
+   How well their best FITTING spaces (top MATCH_TOP of them) suit this
+   request beyond the hard filters:
+     strength = 0.25*size + 0.15*budget + 0.30*geo + 0.30*semantic
+   The semantic part compares the tenant's free text with the space
+   descriptions (embedding cosine similarity when sentence-transformers is
+   installed; TF-IDF keyword overlap otherwise — semantic.BACKEND says
+   which). The reason line quotes what actually matched, via
+   semantic.explain(). If ZERO spaces pass the filters, strength is None —
+   reported as not computable rather than faked.
 
-Usage:
-    from landlord import rank_landlords
-    landlords = rank_landlords(TenantRequest(...))
+ORDERING
+--------
+The list order blends the three (weights below). The blended value is
+returned as "ordering" for sortability/debugging but is NOT meant to be
+displayed — the product shows three transparent signals, not one opaque
+score. match_number enters the blend as n/(n+SATURATION): smooth
+diminishing returns instead of an arbitrary cap.
 """
 
 from collections import defaultdict
 
-from matching import TenantRequest, rank_spaces
+import semantic
+from matching import AREAS, TenantRequest, haversine_km, rank_spaces
 
-L_WEIGHTS = {"quality": 0.30, "depth": 0.20, "area": 0.15,
-             "specialization": 0.15, "semantic": 0.20}
+ORDER_WEIGHTS = {"match_number": 0.40, "specialization": 0.25, "match_strength": 0.35}
+STRENGTH_WEIGHTS = {"size": 0.25, "budget": 0.15, "geo": 0.30, "semantic": 0.30}
+AREA_RADIUS_KM = 2.0     # "in the area" = within 2 km of the neighborhood centroid
+DAMP = 5                 # pseudo-count damping for specialization
+SATURATION = 10          # match_number -> ordering: n / (n + SATURATION)
+MATCH_TOP = 3            # strength = mean over the landlord's top-3 fitting spaces
 
-FIT_THRESHOLD = 60.0     # a space "fits" if its blended score is >= this
+
+def _in_area(space, req):
+    """True if the building is verifiably within AREA_RADIUS_KM of the
+    requested area. Unknown coordinates -> False (never claim a location)."""
+    target = AREAS.get((req.area or "").strip().lower())
+    if target is None:
+        return True                              # no (known) area requested
+    lat, lng = space.get("lat"), space.get("lng")
+    if lat is None or lng is None:
+        return False
+    return haversine_km(lat, lng, target[0], target[1]) <= AREA_RADIUS_KM
+
+
+def passes_hard_filters(space, req):
+    """The four hard filters behind match_number. See module docstring for
+    the per-filter semantics (strict vs known-violation)."""
+    if space["signals"]["type"] != 1.0:                          # type: strict
+        return False
+    if (req.size_min is not None or req.size_max is not None):   # size: strict
+        if space["signals"]["size"] != 1.0:
+            return False
+    if req.budget_max_psf is not None:              # budget: known violations
+        rent = space.get("rent_psf")
+        if rent is not None and rent > req.budget_max_psf:
+            return False
+    return _in_area(space, req)                                  # area: strict
+
+
+def _strength_of(space):
+    """Soft fit of ONE space, 0..1, over the four graded dimensions."""
+    sig = space["signals"]
+    w = STRENGTH_WEIGHTS
+    return (w["size"] * sig["size"] + w["budget"] * sig["budget"]
+            + w["geo"] * sig["geo"] + w["semantic"] * sig["semantic"])
 
 
 def rank_landlords(req: TenantRequest, top_n: int = 5,
                    csv_path: str | None = None):
-    # Score EVERY available space once; the landlord layer is pure aggregation
+    # Score every available space once; the landlord layer is aggregation
     # on top of the space layer — one engine, two views of its output.
     spaces = rank_spaces(req, top_n=10**9, csv_path=csv_path)
 
@@ -42,64 +108,83 @@ def rank_landlords(req: TenantRequest, top_n: int = 5,
     for s in spaces:
         by_landlord[s["landlord"]].append(s)
 
+    area_label = (req.area.strip().title() + " ") if req.area else ""
     results = []
     for name, sp in by_landlord.items():
-        sp.sort(key=lambda s: s["score"], reverse=True)
+        fitting = [s for s in sp if passes_hard_filters(s, req)]
 
-        # quality: average of the top-3 space scores, rescaled to 0..1
-        top3 = sp[:3]
-        quality = sum(s["score"] for s in top3) / len(top3) / 100
+        # ---- signal 1: match_number (a real count) -------------------------
+        match_number = len(fitting)
 
-        # depth: how many spaces clear the fit bar (capped at 5 -> saturates)
-        n_fit = sum(1 for s in sp if s["score"] >= FIT_THRESHOLD)
-        depth = min(n_fit, 5) / 5
+        # ---- signal 2: specialization (count-damped share) -----------------
+        y = len(sp)
+        x = sum(1 for s in sp
+                if s["signals"]["type"] == 1.0 and _in_area(s, req))
+        specialization = (x / y) * (x / (x + DAMP)) if y else 0.0
+        spec_reason = (f"{x} of their {y} available spaces are "
+                       f"{area_label}{req.property_type}")
 
-        # area presence: their single best geo signal (1.0 = right there)
-        area = max(s["signals"]["geo"] for s in sp)
+        # ---- signal 3: match_strength over their best fitting spaces -------
+        if fitting:
+            fitting.sort(key=_strength_of, reverse=True)
+            top = fitting[:MATCH_TOP]
+            match_strength = round(sum(_strength_of(s) for s in top) / len(top), 3)
+            best = top[0]
+            phrase, kind = semantic.explain(req.description, best["description"])
+            if phrase:
+                verb = "matches" if kind == "phrase" else "shares your keywords"
+                strength_reason = f'{best["building"]} {verb} “{phrase}”'
+            else:
+                strength_reason = (f'best fit: {best["building"]} — '
+                                   f'{best["suite"]}' if not req.description.strip()
+                                   else f'no description overlap found with your request')
+        else:
+            match_strength = None                 # honest: nothing to measure
+            best = max(sp, key=_strength_of) if sp else None
+            strength_reason = "no spaces passed your filters — not computed"
 
-        # specialization: share of their available spaces of the wanted type
-        exact = sum(1 for s in sp if s["signals"]["type"] == 1.0)
-        specialization = exact / len(sp)
+        # ---- contact routing (ownership-side, from the best space) ---------
+        contact_src = (fitting[0] if fitting else best)
+        contact = contact_src["contact"] if contact_src else ""
+        contact_tag = ("Ownership-side contact" if "<" in contact
+                       else "Inquiry via landlord site")
 
-        # semantic: mean of the top-5 description matches
-        top5 = sp[:5]
-        sem = sum(s["signals"]["semantic"] for s in top5) / len(top5)
+        # ---- ordering (internal blend — not for display) -------------------
+        ordering = (ORDER_WEIGHTS["match_number"] * (match_number / (match_number + SATURATION))
+                    + ORDER_WEIGHTS["specialization"] * specialization
+                    + ORDER_WEIGHTS["match_strength"] * (match_strength or 0.0))
 
-        w = L_WEIGHTS
-        total = (w["quality"] * quality + w["depth"] * depth + w["area"] * area
-                 + w["specialization"] * specialization + w["semantic"] * sem)
-
-        best = sp[0]
         results.append({
-            "score": round(100 * total, 1),
             "landlord": name,
-            "n_available": len(sp),
-            "n_fitting": n_fit,
-            "best_space": f"{best['building']} — {best['suite']} [{best['score']}]",
-            # Contact routing: the leasing contact of their best-fitting
-            # space — the most direct ownership-side person for THIS request.
-            "contact": best["contact"],
-            "reason": (f"{n_fit} space(s) fit your request (best: {best['score']}); "
-                       f"{int(100 * specialization)}% of available portfolio is "
-                       f"{req.property_type}; "
-                       f"{'strong' if area >= 0.8 else 'some' if area >= 0.4 else 'weak'}"
-                       f" presence in your target area"),
-            "signals": {"quality": round(quality, 3), "depth": round(depth, 3),
-                        "area": round(area, 3), "specialization": round(specialization, 3),
-                        "semantic": round(sem, 3)},
+            "match_number": match_number,                  # "Spaces that fit you"
+            "n_available": y,
+            "specialization": {                            # "Area & type expertise"
+                "score": round(specialization, 3),
+                "x": x, "y": y,
+                "reason": spec_reason,
+            },
+            "match_strength": {                            # "Spaces match quality"
+                "score": match_strength,
+                "reason": strength_reason,
+                "semantic_backend": semantic.BACKEND.split(" ")[0],
+            },
+            "contact": contact,
+            "contact_tag": contact_tag,
             "top_spaces": [{"building": s["building"], "suite": s["suite"],
-                            "score": s["score"]} for s in sp[:5]],
+                            "score": s["score"]} for s in (fitting or sp)[:5]],
+            "ordering": round(ordering, 4),
         })
 
-    results.sort(key=lambda r: r["score"], reverse=True)
+    results.sort(key=lambda r: r["ordering"], reverse=True)
     return results[:top_n]
 
 
 if __name__ == "__main__":
-    req = TenantRequest(property_type="Office", size_min=2000, size_max=6000,
-                        budget_max_psf=45, area="Midtown",
-                        description="professional building with renovated lobby")
+    req = TenantRequest(property_type="Office", size_min=2000, size_max=8000,
+                        budget_max_psf=50, area="Midtown",
+                        description="bright renovated space near grand central")
     for r in rank_landlords(req):
-        print(f"[{r['score']:5.1f}] {r['landlord']} — {r['reason']}")
-        print(f"        best: {r['best_space']}")
-        print(f"        contact: {r['contact']}")
+        s = r["specialization"]; m = r["match_strength"]
+        print(f"{r['landlord']:18} fit={r['match_number']:<4} "
+              f"spec={s['score']:.2f} ({s['reason']})")
+        print(f"{'':18} strength={m['score']} — {m['reason']}")

@@ -88,3 +88,33 @@ except ImportError:
 
         qv = vec(q)
         return [cosine(qv, vec(d)) for d in docs]
+
+
+# ---------------------------------------------------------------------------
+# explain(query, text) -> (phrase, kind)
+# Returns the piece of `text` that actually drove the similarity score, so
+# the UI can show WHY something matched instead of a bare number.
+#   embeddings backend -> the single sentence of `text` closest to the query
+#   TF-IDF backend     -> the actual overlapping keywords (honest: that IS
+#                         all TF-IDF matches on)
+# ---------------------------------------------------------------------------
+def _tokens_fallback(text):
+    return [w for w in re.findall(r"[a-z]+", text.lower()) if len(w) > 2]
+
+
+def explain(query: str, text: str):
+    if not query.strip() or not text.strip():
+        return "", "none"
+    if BACKEND.startswith("sentence"):
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if len(s.strip()) > 20]
+        if not sentences:
+            return "", "none"
+        scores = similarity(query, sentences)
+        best = sentences[max(range(len(scores)), key=lambda i: scores[i])]
+        return (best[:110] + "…") if len(best) > 110 else best, "phrase"
+    # TF-IDF fallback: which meaningful words are shared?
+    tok = _tokens if '_tokens' in globals() else _tokens_fallback
+    q_tokens = tok(query)
+    t_tokens = set(tok(text))
+    shared = [w for w in dict.fromkeys(q_tokens) if w in t_tokens]
+    return ", ".join(shared[:4]), "keywords"

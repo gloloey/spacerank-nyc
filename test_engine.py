@@ -72,14 +72,42 @@ def test_rank_spaces_geo_actually_moves_ranking():
     assert {r["building"] for r in soho} != {r["building"] for r in mid}
 
 
-def test_landlord_aggregation():
-    res = rank_landlords(TenantRequest(property_type="Office", area="Midtown"))
-    assert len(res) == 3                              # GFP, Rudin, SL Green
-    names = {r["landlord"] for r in res}
-    assert names == {"GFP Real Estate", "Rudin Management", "SL Green"}
+def test_landlord_v2_shape_and_bounds():
+    res = rank_landlords(TenantRequest(property_type="Office", area="Midtown",
+                                       description="renovated lobby"))
+    assert {r["landlord"] for r in res} == {"GFP Real Estate",
+                                            "Rudin Management", "SL Green"}
+    orderings = [r["ordering"] for r in res]
+    assert orderings == sorted(orderings, reverse=True)
     for r in res:
-        assert r["n_fitting"] <= r["n_available"]
-        assert 0 <= r["score"] <= 100
+        assert isinstance(r["match_number"], int)          # a COUNT, not a %
+        assert 0 <= r["match_number"] <= r["n_available"]
+        s = r["specialization"]
+        assert 0.0 <= s["score"] <= 1.0 and s["x"] <= s["y"]
+        assert str(s["x"]) in s["reason"] and str(s["y"]) in s["reason"]
+        m = r["match_strength"]
+        assert m["score"] is None or 0.0 <= m["score"] <= 1.0
+        assert "score" not in r                            # no combined % shown
+
+
+def test_landlord_hard_filters_are_hard():
+    """A tiny size window must collapse match_number, not just dent a score."""
+    wide = rank_landlords(TenantRequest(property_type="Office"))
+    narrow = rank_landlords(TenantRequest(property_type="Office",
+                                          size_min=99000, size_max=99500))
+    total_wide = sum(r["match_number"] for r in wide)
+    total_narrow = sum(r["match_number"] for r in narrow)
+    assert total_narrow < total_wide
+    for r in narrow:
+        if r["match_number"] == 0:                 # nothing fits -> no faking
+            assert r["match_strength"]["score"] is None
+
+
+def test_specialization_count_damping():
+    """spec = pct * X/(X+5): a 3-of-3 boutique must NOT beat a 30-of-60 firm."""
+    boutique = 1.0 * (3 / (3 + 5))        # = 0.375
+    big      = 0.5 * (30 / (30 + 5))      # = 0.429
+    assert big > boutique
 
 
 def test_no_leased_or_residential_in_results():

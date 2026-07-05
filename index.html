@@ -63,6 +63,26 @@
              border-radius: 3px; }
   .bar span { font-size: 0.62rem; color: var(--ink-soft); text-transform: uppercase; }
   .ll-card .row1 .bname { font-size: 1.02rem; }
+  .tag { background: #eef7f4; color: #0d9488; border: 1px solid #b6e3d9; font-size: 0.66rem;
+         font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+         text-transform: uppercase; letter-spacing: 0.04em; }
+  .statrow { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .stat { background: var(--accent-soft); border-radius: 10px; padding: 8px 14px;
+          display: flex; align-items: baseline; gap: 8px; }
+  .stat b { font-size: 1.7rem; color: var(--accent); line-height: 1; }
+  .stat span { font-size: 0.66rem; font-weight: 700; text-transform: uppercase;
+               letter-spacing: 0.05em; color: var(--ink-soft); line-height: 1.25; }
+  .statnote { font-size: 0.8rem; color: var(--ink-soft); }
+  .sig { margin-top: 12px; }
+  .sigtop { display: flex; justify-content: space-between; font-size: 0.78rem;
+            font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+  .track { display: block; height: 7px; border-radius: 4px; background: var(--line);
+           position: relative; overflow: hidden; }
+  .track b { position: absolute; inset: 0; width: var(--w); background: var(--accent);
+             border-radius: 4px; }
+  .track.teal b { background: #0d9488; }
+  .sigreason { font-size: 0.8rem; color: var(--ink-soft); margin-top: 5px; }
+  mark { background: #ccfbf1; color: #0f766e; padding: 0 3px; border-radius: 3px; }
   .empty { color: var(--ink-soft); padding: 24px 4px; }
   .foot { margin-top: 34px; font-size: 0.78rem; color: var(--ink-soft); }
   .num { display: inline-block; background: var(--accent); color: #fff; font-weight: 700;
@@ -183,14 +203,44 @@ function spaceCard(r, i) {
   </div>`;
 }
 
+function esc(s) {
+  const d = document.createElement("div");
+  d.textContent = s || "";
+  return d.innerHTML;
+}
+
+/* Landlord card: THREE transparent signals, deliberately NO combined score.
+   1. match_number  -> bold stat tile   ("Spaces that fit you")
+   2. specialization -> blue bar + reason ("Area & type expertise")
+   3. match_strength -> teal bar + reason with the matched phrase highlighted */
 function landlordCard(r) {
   const mail = r.contact.match(/<(.+)>/);
-  const who = mail ? `<a href="mailto:${mail[1]}">${mail[1]}</a>` : r.contact;
+  const who = mail
+    ? `${esc(r.contact.split("<")[0].trim())} — <a href="mailto:${mail[1]}">${mail[1]}</a>`
+    : esc(r.contact || "via landlord site");
+  const spec = r.specialization, str = r.match_strength;
+  const specPct = Math.round(100 * spec.score);
+  const strPct = str.score === null ? null : Math.round(100 * str.score);
+  /* highlight what actually matched: “…” -> <mark>…</mark> */
+  const strReason = esc(str.reason).replace(/“([^”]+)”/g, "<mark>“$1”</mark>");
   return `<div class="card ll-card">
-    <div class="row1"><span class="bname">${r.landlord}</span><span class="badge">${r.score}</span></div>
-    <div class="meta"><span>${r.n_fitting} fitting / ${r.n_available} available</span></div>
-    <div class="why">${r.reason}</div>
-    <div class="contact">Best: ${r.best_space}<br>Reach: ${who}</div>
+    <div class="row1"><span class="bname">${esc(r.landlord)}</span>
+      <span class="tag">${esc(r.contact_tag)}</span></div>
+    <div class="statrow">
+      <div class="stat"><b>${r.match_number}</b><span>Spaces that<br>fit you</span></div>
+      <div class="statnote">of ${r.n_available} currently available</div>
+    </div>
+    <div class="sig">
+      <div class="sigtop"><span>Area &amp; type expertise</span><span>${specPct}%</span></div>
+      <i class="track"><b style="--w:${specPct}%"></b></i>
+      <div class="sigreason">${esc(spec.reason)}</div>
+    </div>
+    <div class="sig">
+      <div class="sigtop"><span>Spaces match quality</span><span>${strPct === null ? "—" : strPct + "%"}</span></div>
+      <i class="track teal"><b style="--w:${strPct || 0}%"></b></i>
+      <div class="sigreason">${strReason}</div>
+    </div>
+    <div class="contact">${who}</div>
   </div>`;
 }
 
