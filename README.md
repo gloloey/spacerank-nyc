@@ -112,6 +112,27 @@ The saturation `n/(n+10)` gives diminishing returns instead of an arbitrary cap.
 - **Suggestion chips** prefill the meaning-match box with phrases the corpus
   actually rewards; clicking × removes exactly the inserted phrase.
 
+## v0.6 — robustness + richer search
+
+- **Multi-area search**: the tenant picks any number of submarkets; geo score
+  and hard filters use the NEAREST selected centroid (several acceptable
+  centers, best one counts).
+- **Grouped deep rankings**: all ~400 spaces are ranked and returned; the UI
+  groups a building's suites into one card (406 spaces live in just 71
+  buildings — ungrouped, ten same-scoring suites looked like one listing
+  repeated) and paginates 10 buildings at a time.
+- **Edge-case hardening**: budget<=0 caused a ZeroDivisionError -> 500 ->
+  the UI hung on "Ranking…". TenantRequest now neutralizes nonsense inputs
+  (budget<=0, size<=0, swapped bounds, unknown areas), the UI has real error
+  cards + a 25s timeout, and `test_nonsense_inputs_never_crash` pins it.
+- **Landlord style** (institutional / family-run — honest labels: SL Green is
+  a public REIT, Rudin and GFP are family firms): a +3-point tiebreaker when
+  the tenant states a preference, disclosed in the reason line, never a
+  ranking driver (test-enforced <= 3.01 delta).
+- **Lease term** (short/long): captured and echoed for the future
+  landlord-contact flow, with ZERO effect on ranking (test-enforced). It
+  already flows into the prefilled inquiry email the tenant can send.
+
 ## Known data caveats
 
 - Only 33 of 135 spaces have a numeric rent; the rest are "Upon request"/"Negotiable".

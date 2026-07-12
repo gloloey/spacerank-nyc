@@ -9,7 +9,7 @@
   :root {
     --ink: #14213d; --ink-soft: #4a5568; --paper: #f7f7f5; --card: #ffffff;
     --accent: #0f6fff; --accent-soft: #e8f1ff; --teal: #0d9488; --line: #e5e7eb;
-    --dark: #1c2536;
+    --dark: #1c2536; --bad: #b91c1c; --bad-soft: #fee2e2;
   }
   * { box-sizing: border-box; margin: 0; }
   body { font-family: "Segoe UI", system-ui, sans-serif; background: var(--paper);
@@ -24,8 +24,9 @@
          padding: 18px; margin-top: 22px; display: grid; gap: 14px;
          grid-template-columns: repeat(6, 1fr); }
   .field { display: flex; flex-direction: column; gap: 4px; }
-  .f-type { grid-column: span 2; } .f-area { grid-column: span 2; }
-  .f-min, .f-max, .f-budget { grid-column: span 1; }
+  .f-type { grid-column: span 2; } .f-style { grid-column: span 2; } .f-term { grid-column: span 2; }
+  .f-min, .f-max, .f-budget { grid-column: span 2; }
+  .f-areas { grid-column: span 6; }
   .f-desc { grid-column: span 5; } .f-go { grid-column: span 1; align-self: end; }
   label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
           letter-spacing: 0.06em; color: var(--ink-soft); }
@@ -38,7 +39,19 @@
            cursor: pointer; }
   button:hover { filter: brightness(1.08); }
 
-  /* ---- suggestion chips for the meaning-match box ---- */
+  /* ---- multi-select area pills ---- */
+  .areagroup { margin-top: 4px; }
+  .areagroup .glabel { font-size: 0.68rem; font-weight: 700; color: var(--ink-soft);
+                       text-transform: uppercase; letter-spacing: 0.05em; margin: 6px 0 4px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill { width: auto; background: #fff; color: var(--ink-soft); border: 1px solid var(--line);
+          border-radius: 999px; padding: 5px 12px; font-size: 0.82rem; cursor: pointer;
+          transition: all .12s; }
+  .pill:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); filter: none; }
+  .pill.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .areahint { font-size: 0.72rem; color: var(--ink-soft); margin-top: 5px; }
+
+  /* ---- suggestion chips ---- */
   .chips { grid-column: span 6; display: flex; flex-wrap: wrap; gap: 7px; margin-top: -6px; }
   .chip { width: auto; background: #fff; color: var(--ink-soft); border: 1px solid var(--line);
           border-radius: 999px; padding: 5px 12px; font-size: 0.82rem; font-weight: 500;
@@ -53,13 +66,15 @@
 
   #map { height: 340px; border-radius: 14px; border: 1px solid var(--line);
          margin-top: 22px; display: none; }
+  .countline { margin-top: 20px; font-size: 0.86rem; color: var(--ink-soft); }
 
-  .cols { display: grid; grid-template-columns: 1.7fr 1fr; gap: 22px; margin-top: 26px; }
-  h2 { font-size: 1.05rem; margin-bottom: 10px; }
+  .cols { display: grid; grid-template-columns: 1.7fr 1fr; gap: 22px; margin-top: 10px; }
+  h2 { font-size: 1.05rem; margin-bottom: 10px; margin-top: 16px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
           padding: 14px 16px; margin-bottom: 12px; }
+  .errcard { background: var(--bad-soft); border: 1px solid #fecaca; color: var(--bad);
+             border-radius: 12px; padding: 14px 16px; font-size: 0.9rem; }
 
-  /* ---- space card with photo + landlord logo ---- */
   .srow { display: flex; gap: 14px; }
   .thumb { width: 92px; height: 92px; border-radius: 10px; object-fit: cover;
            flex-shrink: 0; background: var(--line); }
@@ -68,7 +83,6 @@
   .smain { flex: 1; min-width: 0; }
   .row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
   .bname { font-weight: 700; }
-  .suite { color: var(--ink-soft); font-size: 0.92rem; }
   .badge { background: var(--accent-soft); color: var(--accent); font-weight: 700;
            border-radius: 8px; padding: 3px 9px; white-space: nowrap; }
   .meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.88rem;
@@ -80,6 +94,18 @@
   .llchip .m { width: 16px; height: 16px; border-radius: 50%; background: var(--accent);
                color: #fff; font-size: 0.62rem; font-weight: 800; display: flex;
                align-items: center; justify-content: center; }
+
+  /* ---- suites inside a grouped building card ---- */
+  .suites { margin-top: 9px; border-top: 1px dashed var(--line); }
+  .suiterow { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0;
+              font-size: 0.86rem; border-bottom: 1px dashed var(--line); }
+  .suiterow .sname { color: var(--ink); font-weight: 600; }
+  .suiterow .sinfo { color: var(--ink-soft); white-space: nowrap; }
+  details.moresuites summary { cursor: pointer; color: var(--accent); font-size: 0.82rem;
+                               padding: 6px 0 2px; list-style: none; }
+  details.moresuites summary::before { content: "▸ "; }
+  details.moresuites[open] summary::before { content: "▾ "; }
+
   .why { font-size: 0.85rem; color: var(--ink-soft); margin-top: 8px;
          border-top: 1px dashed var(--line); padding-top: 8px; }
   .contact { font-size: 0.88rem; margin-top: 8px; }
@@ -91,12 +117,15 @@
   .bar i b { position: absolute; inset: 0; width: var(--w); background: var(--accent);
              border-radius: 3px; }
   .bar span { font-size: 0.62rem; color: var(--ink-soft); text-transform: uppercase; }
+  .showmore { margin: 4px 0 14px; background: #fff; color: var(--accent);
+              border: 1px solid var(--accent); }
 
-  /* ---- landlord card (three transparent signals) ---- */
   .ll-card .row1 .bname { font-size: 1.02rem; }
   .tag { background: #eef7f4; color: var(--teal); border: 1px solid #b6e3d9; font-size: 0.66rem;
          font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap;
          text-transform: uppercase; letter-spacing: 0.04em; }
+  .tag.style { background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
+  .tag.stylematch { background: var(--accent); color: #fff; border-color: var(--accent); }
   .statrow { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
   .stat { background: var(--accent-soft); border-radius: 10px; padding: 8px 14px;
           display: flex; align-items: baseline; gap: 8px; }
@@ -122,7 +151,8 @@
   .foot { margin-top: 34px; font-size: 0.78rem; color: var(--ink-soft); }
   @media (max-width: 860px) {
     form { grid-template-columns: repeat(2, 1fr); }
-    .f-type, .f-area, .f-desc, .f-go, .chips, .chips-hint { grid-column: span 2; }
+    .f-type, .f-style, .f-term, .f-min, .f-max, .f-budget,
+    .f-areas, .f-desc, .f-go, .chips, .chips-hint { grid-column: span 2; }
     .cols { grid-template-columns: 1fr; }
     .thumb { width: 72px; height: 72px; }
   }
@@ -143,9 +173,17 @@
         <option>Life Science</option>
       </select>
     </div>
-    <div class="field f-area">
-      <label for="area">Preferred area</label>
-      <select id="area"><option value="">Anywhere in NYC</option></select>
+    <div class="field f-style">
+      <label for="style">Landlord style <span style="font-weight:400;text-transform:none">(light preference)</span></label>
+      <select id="style"><option value="">No preference</option></select>
+    </div>
+    <div class="field f-term">
+      <label for="term">Lease term you're after</label>
+      <select id="term">
+        <option value="">Not sure yet</option>
+        <option value="short">Short term (under ~3 years)</option>
+        <option value="long">Long term (3+ years)</option>
+      </select>
     </div>
     <div class="field f-min">
       <label for="smin">Min sq ft</label>
@@ -159,21 +197,28 @@
       <label for="budget">Budget $/SF/yr</label>
       <input id="budget" type="number" min="0" placeholder="55">
     </div>
+    <div class="field f-areas">
+      <label>Preferred areas — pick as many as you like</label>
+      <div id="areapills"></div>
+      <div class="areahint" id="areahint">No areas selected — searching all of NYC.</div>
+    </div>
     <div class="field f-desc">
       <label for="q">Describe your ideal space (free text — matched by meaning)</label>
       <textarea id="q" placeholder="e.g. bright loft with exposed brick, strong foot traffic, near luxury retail…"></textarea>
     </div>
-    <div class="field f-go"><button type="submit">Rank spaces</button></div>
+    <div class="field f-go"><button type="submit" id="go">Rank spaces</button></div>
     <div class="chips" id="chips"></div>
     <div class="chips-hint">Click to add to your description — click × to remove.</div>
   </form>
 
   <div id="map"></div>
+  <div class="countline" id="countline"></div>
 
   <div class="cols">
     <section>
       <h2>Top spaces</h2>
       <div id="spaces"><div class="empty">Run a search to see ranked spaces.</div></div>
+      <button type="button" class="showmore" id="showmore" style="display:none"></button>
     </section>
     <section>
       <h2>Top landlords</h2>
@@ -201,7 +246,6 @@ function esc(s) {
 const LOGOS = {
   "GFP Real Estate": "https://www.gfpre.com/svg/logo-gfp-white.svg",
   "SL Green":        "https://slgreen.com/wp-content/uploads/2020/08/SLG-logo-rev.png",
-  /* Rudin's logo is CSS-drawn on their site (no image file) -> monogram */
 };
 function monogram(name) {
   return esc((name || "?").split(/\s+/).map(w => w[0]).join("").slice(0, 3).toUpperCase());
@@ -214,7 +258,28 @@ function landlordChip(name) {
   return `<span class="llchip" title="${esc(name)}">${inner}${esc(name)}</span>`;
 }
 
-/* ================= suggestion chips for the meaning-match box ============ */
+/* ================= multi-select area pills =============================== */
+const selectedAreas = new Set();
+function renderAreaPills(groups) {
+  let html = "";
+  for (const [group, entries] of Object.entries(groups)) {
+    html += `<div class="areagroup"><div class="glabel">${esc(group)}</div><div class="pills">`;
+    html += entries.map(a =>
+      `<button type="button" class="pill" data-key="${esc(a.key)}">${esc(a.label)}</button>`).join("");
+    html += `</div></div>`;
+  }
+  $("areapills").innerHTML = html;
+  document.querySelectorAll(".pill").forEach(btn => btn.addEventListener("click", () => {
+    const k = btn.dataset.key;
+    selectedAreas.has(k) ? selectedAreas.delete(k) : selectedAreas.add(k);
+    btn.classList.toggle("on", selectedAreas.has(k));
+    $("areahint").textContent = selectedAreas.size
+      ? `${selectedAreas.size} area${selectedAreas.size > 1 ? "s" : ""} selected — a space counts as "in your area" if it's near ANY of them.`
+      : "No areas selected — searching all of NYC.";
+  }));
+}
+
+/* ================= suggestion chips ====================================== */
 const SUGGESTIONS = [
   "lots of natural light", "high ceilings", "exposed brick and loft feel",
   "column-free open floor", "renovated modern lobby", "landmark Art Deco building",
@@ -235,48 +300,36 @@ function renderChips() {
 function hasPhrase(p) { return $("q").value.toLowerCase().includes(p.toLowerCase()); }
 function addPhrase(p) {
   const cur = $("q").value.trim();
-  /* joins naturally with whatever is already there */
   $("q").value = cur === "" ? p : cur.replace(/[,\s]+$/, "") + ", " + p;
 }
 function removePhrase(p) {
-  /* delete exactly the phrase we inserted, then tidy leftover separators */
   const re = new RegExp("(,\\s*)?" + p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
   $("q").value = $("q").value.replace(re, "")
     .replace(/^\s*,\s*/, "").replace(/,\s*,/g, ",").replace(/[,\s]+$/, "").trim();
 }
-function syncChips() {   /* chips stay honest even if the user edits by hand */
+function syncChips() {
   SUGGESTIONS.forEach((p, i) => $("chip" + i).classList.toggle("on", hasPhrase(p)));
 }
 
-/* ================= form -> API =========================================== */
+/* ================= boot: areas + styles from the API ===================== */
 fetch("/api/areas").then(r => r.json()).then(d => {
-  if (d.groups) {
-    for (const [group, entries] of Object.entries(d.groups)) {
-      const og = document.createElement("optgroup");
-      og.label = group;
-      for (const a of entries) {
-        const o = document.createElement("option");
-        o.value = a.key; o.textContent = a.label;
-        og.appendChild(o);
-      }
-      $("area").appendChild(og);
-    }
-  } else {
-    for (const a of d.areas) {
-      const o = document.createElement("option");
-      o.value = a; o.textContent = a;
-      $("area").appendChild(o);
-    }
+  renderAreaPills(d.groups || {});
+  for (const s of d.styles || []) {
+    const o = document.createElement("option");
+    o.value = s.key; o.textContent = s.label;
+    $("style").appendChild(o);
   }
   $("backend").textContent = "Text matching backend: " + d.semantic_backend + ".";
-});
+}).catch(() => { $("backend").textContent = "Could not load area list — refresh to retry."; });
 
 function params() {
   const p = new URLSearchParams({ property_type: $("type").value, q: $("q").value });
   if ($("smin").value)   p.set("size_min", $("smin").value);
   if ($("smax").value)   p.set("size_max", $("smax").value);
   if ($("budget").value) p.set("budget", $("budget").value);
-  if ($("area").value)   p.set("area", $("area").value);
+  if ($("style").value)  p.set("landlord_style", $("style").value);
+  if ($("term").value)   p.set("term", $("term").value);
+  selectedAreas.forEach(k => p.append("area", k));
   return p;
 }
 
@@ -289,37 +342,79 @@ function signalBars(sig) {
   ).join("") + `</div>`;
 }
 
-/* ================= space card: photo + logo + signals ==================== */
-function spaceCard(r, i) {
-  const mail = r.contact.match(/<(.+)>/);
+/* ============ group consecutive same-building results ==================== */
+/* 406 spaces live in only 71 buildings — without grouping, one building's
+   ten identical-scoring suites LOOK like the same listing repeated. */
+function groupResults(results) {
+  const groups = [];
+  for (const r of results) {
+    const last = groups[groups.length - 1];
+    if (last && last.building === r.building && last.landlord === r.landlord) {
+      last.spaces.push(r);
+    } else {
+      groups.push({ building: r.building, landlord: r.landlord, spaces: [r] });
+    }
+  }
+  return groups;
+}
+
+function suiteRow(s) {
+  return `<div class="suiterow">
+    <span class="sname">${esc(s.suite) || "Space"}</span>
+    <span class="sinfo">${fmt(s.size_sqft)} sf · ${esc(s.rent) || "rent on request"} · ${s.score}</span>
+  </div>`;
+}
+
+function mailtoHref(email, g) {
+  const term = $("term").value;
+  const subject = encodeURIComponent(`Inquiry: ${g.building} (via SpaceRank NYC)`);
+  const body = encodeURIComponent(
+    `Hello,\n\nI found ${g.building} on SpaceRank NYC and would like to know more.\n\n` +
+    `What I'm looking for:\n` +
+    `- Type: ${$("type").value}\n` +
+    ($("smin").value || $("smax").value ? `- Size: ${$("smin").value || "?"}-${$("smax").value || "?"} sq ft\n` : "") +
+    ($("budget").value ? `- Budget: ~$${$("budget").value}/SF/yr\n` : "") +
+    (term ? `- Lease term: ${term === "short" ? "short (under ~3 years)" : "long (3+ years)"}\n` : "") +
+    (selectedAreas.size ? `- Areas: ${[...selectedAreas].join(", ")}\n` : "") +
+    `\nSuites of interest: ${g.spaces.slice(0, 3).map(s => s.suite).join("; ")}\n\nThank you`);
+  return `mailto:${email}?subject=${subject}&body=${body}`;
+}
+
+function groupCard(g, i) {
+  const top = g.spaces[0];
+  const mail = top.contact.match(/<(.+)>/);
   const who = mail
-    ? `${esc(r.contact.split("<")[0].trim())} — <a href="mailto:${mail[1]}">${mail[1]}</a>`
-    : `${esc(r.contact)} — <a href="${r.url}" target="_blank" rel="noopener">inquire via site</a>`;
-  const built = r.year_built ? `<span>built ${r.year_built}</span>` : "";
-  const photo = r.image
-    ? `<img class="thumb" src="${r.image}" alt="${esc(r.building)}" loading="lazy"
-          onerror="this.outerHTML='<div class=&quot;thumb mono&quot;>${monogram(r.building)}</div>'">`
-    : `<div class="thumb mono">${monogram(r.building)}</div>`;
+    ? `${esc(top.contact.split("<")[0].trim())} — <a href="${mailtoHref(mail[1], g)}">${mail[1]}</a>`
+    : `${esc(top.contact)} — <a href="${top.url}" target="_blank" rel="noopener">inquire via site</a>`;
+  const built = top.year_built ? `<span>built ${top.year_built}</span>` : "";
+  const photo = top.image
+    ? `<img class="thumb" src="${top.image}" alt="${esc(g.building)}" loading="lazy"
+          onerror="this.outerHTML='<div class=&quot;thumb mono&quot;>${monogram(g.building)}</div>'">`
+    : `<div class="thumb mono">${monogram(g.building)}</div>`;
+  const first = g.spaces.slice(0, 3), rest = g.spaces.slice(3);
+  const suites = `<div class="suites">${first.map(suiteRow).join("")}
+    ${rest.length ? `<details class="moresuites"><summary>${rest.length} more space${rest.length > 1 ? "s" : ""} in this building</summary>${rest.map(suiteRow).join("")}</details>` : ""}</div>`;
   return `<div class="card">
     <div class="srow">
       ${photo}
       <div class="smain">
         <div class="row1">
-          <div><span class="num">${i + 1}</span><span class="bname">${esc(r.building)}</span><br>
-               <span class="suite">${esc(r.suite)}</span></div>
-          <span class="badge">${r.score}</span>
+          <div><span class="num">${i + 1}</span><span class="bname">${esc(g.building)}</span></div>
+          <span class="badge">${top.score}</span>
         </div>
-        <div class="meta">${landlordChip(r.landlord)}<span>${fmt(r.size_sqft)} sf</span>
-          <span>${esc(r.rent) || "rent on request"}</span>${built}<span>${esc(r.borough)}</span></div>
-        ${signalBars(r.signals)}
+        <div class="meta">${landlordChip(g.landlord)}
+          <span>${g.spaces.length} matching space${g.spaces.length > 1 ? "s" : ""}</span>
+          ${built}<span>${esc(top.borough)}</span></div>
+        ${signalBars(top.signals)}
       </div>
     </div>
-    <div class="why">${esc(r.reason)}</div>
-    <div class="contact">${who} · <a href="${r.url}" target="_blank" rel="noopener">listing ↗</a></div>
+    ${suites}
+    <div class="why">${esc(top.reason)}</div>
+    <div class="contact">${who} · <a href="${top.url}" target="_blank" rel="noopener">listing ↗</a></div>
   </div>`;
 }
 
-/* ================= landlord card: three transparent signals ============== */
+/* ================= landlord card ========================================= */
 function landlordCard(r) {
   const mail = r.contact.match(/<(.+)>/);
   const who = mail
@@ -329,9 +424,13 @@ function landlordCard(r) {
   const specPct = Math.round(100 * spec.score);
   const strPct = str.score === null ? null : Math.round(100 * str.score);
   const strReason = esc(str.reason).replace(/“([^”]+)”/g, "<mark>“$1”</mark>");
+  const styleTag = r.style_label
+    ? `<span class="tag style ${r.style_match ? "stylematch" : ""}">${esc(r.style_label)}${r.style_match ? " ✓" : ""}</span>`
+    : "";
   return `<div class="card ll-card">
     <div class="row1"><span class="bname">${landlordChip(r.landlord)}</span>
       <span class="tag">${esc(r.contact_tag)}</span></div>
+    <div style="margin-top:7px">${styleTag}</div>
     <div class="statrow">
       <div class="stat"><b>${r.match_number}</b><span>Spaces that<br>fit you</span></div>
       <div class="statnote">of ${r.n_available} currently available</div>
@@ -350,10 +449,10 @@ function landlordCard(r) {
   </div>`;
 }
 
-/* ================= the map =============================================== */
+/* ================= map: one pin per building group ======================= */
 let map = null, markerLayer = null;
-function drawMap(results) {
-  const pts = results.filter(r => r.lat && r.lng);
+function drawMap(groups) {
+  const pts = groups.filter(g => g.spaces[0].lat && g.spaces[0].lng).slice(0, 30);
   const el = $("map");
   if (!pts.length) { el.style.display = "none"; return; }
   el.style.display = "block";
@@ -365,14 +464,14 @@ function drawMap(results) {
   }
   markerLayer.clearLayers();
   const bounds = [];
-  results.forEach((r, i) => {
-    if (!r.lat || !r.lng) return;
+  pts.forEach((g, i) => {
+    const r = g.spaces[0];
     const icon = L.divIcon({ className: "", iconSize: [24, 24],
       html: `<div style="background:#0f6fff;color:#fff;font-weight:700;border-radius:50%;
                     width:24px;height:24px;text-align:center;line-height:24px;
                     box-shadow:0 1px 4px rgba(0,0,0,.4)">${i + 1}</div>` });
     L.marker([r.lat, r.lng], { icon })
-      .bindPopup(`<b>${esc(r.building)}</b><br>${esc(r.suite)}<br>score ${r.score}`)
+      .bindPopup(`<b>${esc(g.building)}</b><br>${g.spaces.length} matching space(s)<br>top score ${r.score}`)
       .addTo(markerLayer);
     bounds.push([r.lat, r.lng]);
   });
@@ -380,21 +479,67 @@ function drawMap(results) {
   setTimeout(() => map.invalidateSize(), 100);
 }
 
-/* ================= wire-up =============================================== */
+/* ================= paginated rendering =================================== */
+const PAGE = 10;
+let allGroups = [], shown = 0;
+function renderMore() {
+  const next = allGroups.slice(shown, shown + PAGE);
+  $("spaces").insertAdjacentHTML("beforeend",
+    next.map((g, j) => groupCard(g, shown + j)).join(""));
+  shown += next.length;
+  const remaining = allGroups.length - shown;
+  $("showmore").style.display = remaining > 0 ? "block" : "none";
+  $("showmore").textContent = `Show more results (${remaining} more building${remaining > 1 ? "s" : ""} ranked)`;
+}
+$("showmore").addEventListener("click", renderMore);
+
+/* ================= submit with real error handling ====================== */
+async function getJSON(url, signal) {
+  const r = await fetch(url, { signal });
+  if (!r.ok) throw new Error(`The server answered ${r.status} — please try again or tweak your filters.`);
+  return r.json();
+}
+
 renderChips();
 $("q").addEventListener("input", syncChips);
 
 $("f").addEventListener("submit", async e => {
   e.preventDefault();
+  $("go").disabled = true;
   $("spaces").innerHTML = $("landlords").innerHTML = `<div class="empty">Ranking…</div>`;
-  const p = params();
-  const [m, l] = await Promise.all([
-    fetch("/api/match?" + p).then(r => r.json()),
-    fetch("/api/landlords?" + p).then(r => r.json()),
-  ]);
-  $("spaces").innerHTML   = m.results.map(spaceCard).join("") || `<div class="empty">No matches.</div>`;
-  $("landlords").innerHTML = l.results.map(landlordCard).join("") || `<div class="empty">No landlords.</div>`;
-  drawMap(m.results);
+  $("countline").textContent = ""; $("showmore").style.display = "none";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25000);
+  try {
+    const p = params();
+    const [m, l] = await Promise.all([
+      getJSON("/api/match?" + p, ctrl.signal),
+      getJSON("/api/landlords?" + p, ctrl.signal),
+    ]);
+    allGroups = groupResults(m.results); shown = 0;
+    if (!allGroups.length) {
+      $("spaces").innerHTML = `<div class="empty">No available spaces could be ranked for this search.
+        Try removing an area, widening the size range, or clearing the budget.</div>`;
+      $("map").style.display = "none";
+    } else {
+      $("spaces").innerHTML = "";
+      renderMore();
+      $("countline").textContent =
+        `${m.results.length} spaces ranked across ${allGroups.length} buildings — every listing is scored, even far-from-perfect ones, so keep scrolling.`;
+      drawMap(allGroups);
+    }
+    $("landlords").innerHTML = l.results.map(landlordCard).join("")
+      || `<div class="empty">No landlords to rank.</div>`;
+  } catch (err) {
+    const msg = err.name === "AbortError"
+      ? "The search took too long (25s) — please try again."
+      : (err.message || "Something went wrong — please try again.");
+    $("spaces").innerHTML = `<div class="errcard">⚠ ${esc(msg)}</div>`;
+    $("landlords").innerHTML = `<div class="empty">—</div>`;
+  } finally {
+    clearTimeout(timer);
+    $("go").disabled = false;
+  }
 });
 </script>
 </body>

@@ -15,7 +15,7 @@ QUERIES = [
          property_type="Showroom",
          size_min=1500, size_max=5000,
          budget_max_psf=60,
-         area="soho & noho",
+         areas=["soho & noho"],
          description="bright loft-style space with exposed brick and high "
                      "ceilings, strong foot traffic, near luxury retail and "
                      "flagship fashion stores")),
@@ -24,7 +24,7 @@ QUERIES = [
      TenantRequest(
          property_type="Office",
          size_min=8000, size_max=20000,
-         area="flatiron & union square",
+         areas=["flatiron & union square"],
          description="modern open floor plate with natural light for a "
                      "growing engineering team, close to subway lines and "
                      "the downtown tech scene")),
@@ -34,7 +34,7 @@ QUERIES = [
          property_type="Office",
          size_min=2000, size_max=6000,
          budget_max_psf=45,
-         area="penn district & garment",
+         areas=["penn district & garment"],
          description="professional pre-war building with renovated lobby, "
                      "attended entrance and quick access to Grand Central "
                      "and Penn Station")),

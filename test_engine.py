@@ -50,9 +50,9 @@ def test_haversine_known_distance():
 def test_geo_neutral_when_ungeocode():
     """DESIGN DECISION: a building we couldn't geocode scores neutral,
     it does not crash the ranking with NaN."""
-    assert score_geo(NAN, NAN, "soho & noho")[0] == 0.5
-    assert score_geo(40.72, -74.0, None)[0] == 0.5   # no area requested
-    assert score_geo(40.72, -74.0, "atlantis")[0] == 0.5  # unknown area
+    assert score_geo(NAN, NAN, ["soho & noho"])[0] == 0.5
+    assert score_geo(40.72, -74.0, [])[0] == 0.5     # no area requested
+    assert score_geo(40.72, -74.0, [])[0] == 0.5     # (unknown areas are\n    #  stripped by TenantRequest.__post_init__ before reaching here)
 
 
 # ---- ranking pipeline --------------------------------------------------------
@@ -67,13 +67,13 @@ def test_rank_spaces_shape_and_order():
 
 
 def test_rank_spaces_geo_actually_moves_ranking():
-    soho = rank_spaces(TenantRequest(property_type="Office", area="soho & noho"), top_n=3)
-    mid  = rank_spaces(TenantRequest(property_type="Office", area="grand central & murray hill"), top_n=3)
+    soho = rank_spaces(TenantRequest(property_type="Office", areas=["soho & noho"]), top_n=3)
+    mid  = rank_spaces(TenantRequest(property_type="Office", areas=["grand central & murray hill"]), top_n=3)
     assert {r["building"] for r in soho} != {r["building"] for r in mid}
 
 
 def test_landlord_v2_shape_and_bounds():
-    res = rank_landlords(TenantRequest(property_type="Office", area="penn district & garment",
+    res = rank_landlords(TenantRequest(property_type="Office", areas=["penn district & garment"],
                                        description="renovated lobby"))
     assert {r["landlord"] for r in res} == {"GFP Real Estate",
                                             "Rudin Management", "SL Green"}
@@ -124,6 +124,72 @@ def test_every_result_has_image_or_none():
     for r in res:
         assert r["image"] is None or r["image"].startswith("http")
     assert sum(1 for r in res if r["image"]) >= 15   # coverage is ~100%
+
+
+def test_nonsense_inputs_never_crash():
+    """budget=0 used to ZeroDivisionError -> a 500 -> eternal 'Ranking…'."""
+    for req in (TenantRequest(property_type="Office", budget_max_psf=0),
+                TenantRequest(property_type="Office", budget_max_psf=-3),
+                TenantRequest(property_type="Office", size_min=0, size_max=0),
+                TenantRequest(property_type="Office", size_min=9000, size_max=100),
+                TenantRequest(property_type="Office", areas=["atlantis", ""])):
+        res = rank_spaces(req, top_n=3)
+        assert len(res) == 3
+    swapped = TenantRequest(property_type="Office", size_min=9000, size_max=100)
+    assert swapped.size_min == 100 and swapped.size_max == 9000
+
+
+def test_multi_area_uses_nearest():
+    """A Tribeca building must score high when Tribeca is one of SEVERAL
+    selected areas — nearest centroid wins, the far one doesn't hurt."""
+    one = score_geo(40.7163, -74.0086, ["tribeca"])[0]
+    many = score_geo(40.7163, -74.0086, ["south bronx", "tribeca", "jersey city"])[0]
+    assert many == one == 1.0
+    # and multi-area widens the fitting pool at the landlord level
+    a = rank_landlords(TenantRequest(property_type="Office", areas=["tribeca"]))
+    b = rank_landlords(TenantRequest(property_type="Office",
+                                     areas=["tribeca", "soho & noho"]))
+    assert (sum(r["match_number"] for r in b)
+            >= sum(r["match_number"] for r in a))
+
+
+def test_style_preference_is_a_nudge_not_a_driver():
+    plain = rank_spaces(TenantRequest(property_type="Office"), top_n=10**9)
+    pref  = rank_spaces(TenantRequest(property_type="Office",
+                                      landlord_style="family-run"), top_n=10**9)
+    by_key = {(r["building"], r["suite"]): r["score"] for r in plain}
+    for r in pref:
+        delta = r["score"] - by_key[(r["building"], r["suite"])]
+        if r["landlord_style"] == "family-run":
+            assert 0 <= delta <= 3.01          # exactly the small bonus
+        else:
+            assert abs(delta) < 1e-9           # others untouched
+
+
+def test_term_is_stored_but_never_scored():
+    """`term` must have ZERO effect on any ranking — it's future contact data."""
+    a = rank_spaces(TenantRequest(property_type="Office", term="short"), top_n=10**9)
+    b = rank_spaces(TenantRequest(property_type="Office", term=None), top_n=10**9)
+    assert [(r["building"], r["suite"], r["score"]) for r in a] == \
+           [(r["building"], r["suite"], r["score"]) for r in b]
+    la = rank_landlords(TenantRequest(property_type="Office", term="long"))
+    lb = rank_landlords(TenantRequest(property_type="Office"))
+    assert [(r["landlord"], r["ordering"]) for r in la] == \
+           [(r["landlord"], r["ordering"]) for r in lb]
+
+
+def test_no_duplicate_spaces_in_results():
+    res = rank_spaces(TenantRequest(property_type="Office"), top_n=10**9)
+    keys = [(r["landlord"], r["building"], r["suite"]) for r in res]
+    assert len(keys) == len(set(keys))
+
+
+def test_deep_ranking_returns_everything():
+    """The tenant can scroll far: ALL available commercial spaces get ranked."""
+    res = rank_spaces(TenantRequest(property_type="Office"), top_n=500)
+    assert len(res) >= 400                     # 406 minus nothing hidden
+    scores = [r["score"] for r in res]
+    assert scores == sorted(scores, reverse=True)
 
 
 if __name__ == "__main__":

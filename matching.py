@@ -1,6 +1,6 @@
 """
-matching.py — SpaceRank NYC: the matching engine (Layer 2, the spine)
-=====================================================================
+matching.py — SpaceRank NYC: the matching engine (Layer 2, the spine) — v3
+==========================================================================
 Given a tenant request, score EVERY available space on five signals and blend
 them into one 0-100 number, with a human-readable reason per result.
 
@@ -9,20 +9,27 @@ THE FIVE SIGNALS (each scored 0..1, then weighted):
   type      does the space's use (Office/Retail/...) match what they asked for?
   size      how close is the space to their target square footage?
   budget    is the asking rent within their $/SF/year budget?
-  geo       real distance (haversine formula) from where they want to be
+  geo       distance (haversine) to the NEAREST of the tenant's chosen areas —
+            the tenant may now select SEVERAL submarkets
   semantic  meaning-similarity between their free-text wish and the
             building's description (see semantic.py)
 
+PLUS one deliberately small nudge:
+  landlord style — if the tenant prefers an institutional or family-run
+  landlord, matching spaces get a flat +STYLE_BONUS points (3 on a 0-100
+  scale — a tiebreaker, never a ranking driver), noted in the reason line.
+
+AND one stored-only field:
+  term ("short"/"long") — captured for the future landlord-contact flow,
+  intentionally NEVER used in scoring (test_engine.py enforces this).
+
 DESIGN RULES (defensible in an interview):
   * Explicit weights, visible in one place (WEIGHTS below).
-  * Unknown data gets a NEUTRAL score (0.5), never a fake good/bad one —
-    e.g. "rent upon request" shouldn't sink a great space, nor boost it.
-  * Every result carries its per-signal scores + a reason string, because a
-    ranking you can't explain is a ranking you can't defend.
-
-Usage:
-    from matching import TenantRequest, rank_spaces
-    results = rank_spaces(TenantRequest(...), top_n=5)
+  * Unknown data gets a NEUTRAL score (0.5), never a fake good/bad one.
+  * Nonsense inputs are neutralized, not crashed on: budget <= 0 and
+    size limits <= 0 are treated as "not provided".
+  * Every result carries its per-signal scores + a reason string, and every
+    value emitted to JSON is NaN-guarded.
 """
 
 import math
@@ -33,21 +40,31 @@ import pandas as pd
 
 import semantic
 
-# ---------------------------------------------------------------------------
-# The blend. Geo + semantic carry the most because they're what makes this
-# product different from a plain filter form.
-# ---------------------------------------------------------------------------
 WEIGHTS = {"type": 0.20, "size": 0.20, "budget": 0.15, "geo": 0.25, "semantic": 0.20}
+STYLE_BONUS = 3.0        # points (of 100) when the landlord matches the
+                         # tenant's style preference — small on purpose
 
 # ---------------------------------------------------------------------------
-# AREAS: NYC office SUBMARKETS at consistent granularity (the standard CBRE/
-# JLL-style districts, ~1-2 km each) — replacing the earlier ad-hoc mix of
-# borough-sized blobs ("midtown") and micro-districts ("plaza district").
-# Keys are lowercase lookup ids; AREA_LABELS holds the display names;
-# AREA_GROUPS drives the grouped dropdown in the UI.
+# Landlord profiles — honest, verifiable classifications:
+#   SL Green:  publicly traded REIT (NYSE: SLG), NYC's largest office landlord
+#   Rudin:     family-owned and family-run since 1925
+#   GFP:       family-owned (Gural family), value/loft-focused portfolio
+# Only styles that actually exist in the data are offered as filters.
+# ---------------------------------------------------------------------------
+LANDLORD_PROFILES = {
+    "SL Green":         "institutional",
+    "Rudin Management": "family-run",
+    "GFP Real Estate":  "family-run",
+}
+STYLE_LABELS = {"institutional": "Institutional (public REIT)",
+                "family-run": "Family-run firm"}
+
+# ---------------------------------------------------------------------------
+# AREAS: NYC office SUBMARKETS at consistent granularity (CBRE/JLL-style
+# districts, ~1-2 km each). Keys are lowercase ids; AREA_LABELS holds display
+# names; AREA_GROUPS drives the grouped picker in the UI.
 # ---------------------------------------------------------------------------
 AREAS = {
-    # Manhattan submarkets, south to north
     "financial district":               (40.7075, -74.0113),
     "tribeca":                          (40.7163, -74.0086),
     "soho & noho":                      (40.7248, -73.9973),
@@ -60,7 +77,6 @@ AREAS = {
     "grand central & murray hill":      (40.7513, -73.9765),
     "plaza district":                   (40.7625, -73.9722),
     "columbus circle & midtown west":   (40.7680, -73.9838),
-    # beyond Manhattan
     "long island city":                 (40.7447, -73.9485),
     "north brooklyn (williamsburg)":    (40.7144, -73.9573),
     "brooklyn navy yard":               (40.7005, -73.9720),
@@ -96,16 +112,51 @@ AREA_GROUPS = {
 }
 
 
+def _clean_positive(x):
+    """Nonsense numeric input (None, NaN, <= 0) -> None ('not provided')."""
+    try:
+        x = float(x)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(x) or x <= 0:
+        return None
+    return x
+
+
+def valid_areas(areas):
+    """Normalize a list of requested areas to known AREAS keys."""
+    out = []
+    for a in areas or []:
+        k = str(a).strip().lower()
+        if k in AREAS and k not in out:
+            out.append(k)
+    return out
+
+
 @dataclass
 class TenantRequest:
     """What the tenant fills in on the site. Everything optional except type."""
-    property_type: str                    # "Office", "Retail", "Showroom", ...
-    size_min: float | None = None         # sq ft
+    property_type: str                     # "Office", "Retail", "Showroom", ...
+    size_min: float | None = None          # sq ft
     size_max: float | None = None
-    budget_max_psf: float | None = None   # $ per sq ft per year
-    area: str | None = None               # e.g. "SoHo" (looked up in AREAS)
-    description: str = ""                 # free text — feeds the semantic layer
+    budget_max_psf: float | None = None    # $ per sq ft per year
+    areas: list = field(default_factory=list)   # 0..n submarket keys
+    description: str = ""                  # free text — feeds the semantic layer
+    landlord_style: str | None = None      # "institutional" | "family-run" | None
+    term: str | None = None                # "short" | "long" — STORED ONLY
     weights: dict = field(default_factory=lambda: dict(WEIGHTS))
+
+    def __post_init__(self):
+        # neutralize nonsense inputs instead of crashing deep in a scorer
+        self.size_min = _clean_positive(self.size_min)
+        self.size_max = _clean_positive(self.size_max)
+        if (self.size_min is not None and self.size_max is not None
+                and self.size_max < self.size_min):     # swapped bounds
+            self.size_min, self.size_max = self.size_max, self.size_min
+        self.budget_max_psf = _clean_positive(self.budget_max_psf)
+        self.areas = valid_areas(self.areas)
+        if self.landlord_style not in STYLE_LABELS:
+            self.landlord_style = None
 
 
 # ---------------------------------------------------------------------------
@@ -127,24 +178,24 @@ def score_type(space_type: str, wanted: str):
 
 
 def score_size(sqft, lo, hi):
-    """1.0 inside the target range; decays with % deviation outside it.
-    (e.g. 30% too small -> 0.7). No range given -> neutral."""
+    """1.0 inside the target range; decays with % deviation outside it."""
     if lo is None and hi is None:
         return 0.5, "no size target"
     if sqft is None or (isinstance(sqft, float) and math.isnan(sqft)):
         return 0.5, "size unlisted"
     lo = lo or 0
-    hi = hi or float("inf")
+    hi = hi if hi is not None else float("inf")
     if lo <= sqft <= hi:
         return 1.0, f"{int(sqft):,} sf fits target"
     edge = lo if sqft < lo else hi
-    deviation = abs(sqft - edge) / edge          # how far outside, relatively
+    deviation = abs(sqft - edge) / max(edge, 1.0)
     return max(0.0, 1 - deviation), f"{int(sqft):,} sf ({'below' if sqft < lo else 'above'} target)"
 
 
 def score_budget(rent_psf, budget):
-    """Within budget = 1; over budget decays by % overage; unknown = neutral."""
-    if budget is None:
+    """Within budget = 1; over budget decays by % overage; unknown = neutral.
+    budget is pre-sanitized by TenantRequest (never 0 here), but stay safe."""
+    if budget is None or budget <= 0:
         return 0.5, "no budget given"
     if rent_psf is None or (isinstance(rent_psf, float) and math.isnan(rent_psf)):
         return 0.5, "rent on request"
@@ -155,8 +206,7 @@ def score_budget(rent_psf, budget):
 
 
 def haversine_km(lat1, lng1, lat2, lng2):
-    """Great-circle distance between two points on Earth, in km.
-    Turns coordinates into real 'how far is it actually' distance."""
+    """Great-circle distance between two points on Earth, in km."""
     r = 6371.0
     p1, p2 = math.radians(lat1), math.radians(lat2)
     dp, dl = math.radians(lat2 - lat1), math.radians(lng2 - lng1)
@@ -164,19 +214,29 @@ def haversine_km(lat1, lng1, lat2, lng2):
     return 2 * r * math.asin(math.sqrt(a))
 
 
-def score_geo(lat, lng, area):
-    """<=0.5 km from the requested area = 1.0, fading linearly to 0 at 8 km —
-    roughly 'anywhere in the same part of the city still counts a bit'."""
-    if not area:
+def nearest_area(lat, lng, area_keys):
+    """(distance_km, key) of the closest requested area, or (None, None)."""
+    if lat != lat or lng != lng:                     # NaN -> unknown location
+        return None, None
+    best = None
+    for k in area_keys:
+        c = AREAS[k]
+        d = haversine_km(lat, lng, c[0], c[1])
+        if best is None or d < best[0]:
+            best = (d, k)
+    return best if best else (None, None)
+
+
+def score_geo(lat, lng, area_keys):
+    """Distance to the NEAREST selected area: 1.0 within 0.5 km, fading to 0
+    at 8 km. Several areas = several acceptable centers, best one counts."""
+    if not area_keys:
         return 0.5, "no area requested", None
-    target = AREAS.get(area.strip().lower())
-    if target is None:
-        return 0.5, f"unknown area '{area}'", None
-    if lat != lat or lng != lng:                 # NaN: building not geocoded
+    d, k = nearest_area(lat, lng, area_keys)
+    if d is None:
         return 0.5, "location unknown", None
-    d = haversine_km(lat, lng, target[0], target[1])
     score = 1.0 if d <= 0.5 else max(0.0, 1 - (d - 0.5) / 7.5)
-    return score, f"{d:.1f} km from {area}", d
+    return score, f"{d:.1f} km from {AREA_LABELS[k]}", d
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +245,6 @@ def score_geo(lat, lng, area):
 _HERE = os.path.dirname(os.path.abspath(__file__))   # works locally AND deployed
 
 # building photo per slug, collected from each landlord's own site
-# (tools note: hotlinked, not redistributed; UI falls back to a monogram)
 try:
     import json as _json
     with open(os.path.join(_HERE, "building_images.json"), encoding="utf-8") as _f:
@@ -194,12 +253,23 @@ except Exception:
     BUILDING_IMAGES = {}
 
 
+def _s(v, default=""):
+    """NaN-safe string: every text field emitted to JSON goes through here."""
+    return v if isinstance(v, str) else default
+
+
+def _n(v):
+    """NaN-safe number: NaN -> None (valid JSON)."""
+    return None if v is None or v != v else v
+
+
 def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None):
     csv_path = csv_path or os.path.join(_HERE, "spaces_clean.csv")
     df = pd.read_csv(csv_path)
     df = df[df["is_available"] & (df["building_use"] == "commercial")].copy()
+    # belt & suspenders: identical (landlord, building, suite) rows collapse
+    df = df.drop_duplicates(subset=["landlord", "building_name", "floor_suite"])
 
-    # Semantic scores for all rows at once (one pass is much faster).
     if req.description.strip():
         sem_scores = semantic.similarity(req.description, df["description"].fillna("").tolist())
     else:
@@ -210,37 +280,42 @@ def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None)
         s_type, r_type = score_type(row["space_type"], req.property_type)
         s_size, r_size = score_size(row["size_sqft"], req.size_min, req.size_max)
         s_budg, r_budg = score_budget(row["rent_psf"], req.budget_max_psf)
-        s_geo, r_geo, _ = score_geo(row["lat"], row["lng"], req.area)
+        s_geo, r_geo, _d = score_geo(row["lat"], row["lng"], req.areas)
 
         w = req.weights
-        total = (w["type"] * s_type + w["size"] * s_size + w["budget"] * s_budg
-                 + w["geo"] * s_geo + w["semantic"] * sem)
+        total = 100 * (w["type"] * s_type + w["size"] * s_size
+                       + w["budget"] * s_budg + w["geo"] * s_geo
+                       + w["semantic"] * sem)
 
+        # small, transparent landlord-style nudge (a tiebreaker by design)
+        style = LANDLORD_PROFILES.get(row["landlord"])
+        style_note = ""
+        if req.landlord_style and style == req.landlord_style:
+            total = min(100.0, total + STYLE_BONUS)
+            style_note = f"; {STYLE_LABELS[style].lower()} (your preference, +{STYLE_BONUS:.0f})"
+
+        slug = _s(row["source_url"]).rstrip("/").split("/")[-1]
         results.append({
-            "score": round(100 * total, 1),
-            "landlord": row["landlord"],
-            "building": row["building_name"],
-            "suite": row["floor_suite"] if isinstance(row["floor_suite"], str) else "",
-            # NaN is not valid JSON — the API layer needs None instead
-            "size_sqft": None if row["size_sqft"] != row["size_sqft"] else row["size_sqft"],
-            # empty rents parse as float NaN -> not JSON-safe; emit ""
-            "rent": row["rent"] if isinstance(row["rent"], str) else "",
-            # raw numeric rent (NaN -> None): lets the landlord layer apply a
-            # HARD budget filter on known rents instead of guessing from the
-            # blended budget score (which is 0.5 for both "unknown" and
-            # "25% over budget" — ambiguous).
-            "rent_psf": None if row["rent_psf"] != row["rent_psf"] else row["rent_psf"],
-            "description": row["description"] if isinstance(row["description"], str) else "",
-            "borough": row["borough"],
-            "contact": (f"{row['contact_name']} <{row['contact_email']}>"
-                        if isinstance(row["contact_email"], str) and row["contact_email"]
-                        else str(row["contact_name"] or "")),
-            "url": row["source_url"],
-            "image": BUILDING_IMAGES.get(row["source_url"].rstrip("/").split("/")[-1]),
-            "lat": None if row["lat"] != row["lat"] else row["lat"],
-            "lng": None if row["lng"] != row["lng"] else row["lng"],
-            "year_built": None if row.get("year_built", float("nan")) != row.get("year_built", float("nan")) else int(row["year_built"]),
-            "reason": f"{r_type}; {r_size}; {r_budg}; {r_geo}; description match {sem:.2f}",
+            "score": round(total, 1),
+            "landlord": _s(row["landlord"]),
+            "landlord_style": style,
+            "building": _s(row["building_name"]),
+            "suite": _s(row["floor_suite"]),
+            "size_sqft": _n(row["size_sqft"]),
+            "rent": _s(row["rent"]),
+            "rent_psf": _n(row["rent_psf"]),
+            "description": _s(row["description"]),
+            "borough": _s(row["borough"]),
+            "contact": (f"{_s(row['contact_name'])} <{row['contact_email']}>"
+                        if _s(row["contact_email"]) else _s(row["contact_name"])),
+            "url": _s(row["source_url"]),
+            "image": BUILDING_IMAGES.get(slug),
+            "lat": _n(row["lat"]),
+            "lng": _n(row["lng"]),
+            "year_built": None if row.get("year_built") != row.get("year_built")
+                          else int(row["year_built"]),
+            "reason": f"{r_type}; {r_size}; {r_budg}; {r_geo}; "
+                      f"description match {sem:.2f}{style_note}",
             "signals": {"type": s_type, "size": s_size, "budget": s_budg,
                         "geo": s_geo, "semantic": round(sem, 3)},
         })
