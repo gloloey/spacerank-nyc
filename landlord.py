@@ -53,7 +53,7 @@ diminishing returns instead of an arbitrary cap.
 from collections import defaultdict
 
 import semantic
-from matching import AREAS, TenantRequest, haversine_km, rank_spaces
+from matching import AREAS, AREA_LABELS, TenantRequest, haversine_km, rank_spaces
 
 ORDER_WEIGHTS = {"match_number": 0.40, "specialization": 0.25, "match_strength": 0.35}
 STRENGTH_WEIGHTS = {"size": 0.25, "budget": 0.15, "geo": 0.30, "semantic": 0.30}
@@ -108,7 +108,8 @@ def rank_landlords(req: TenantRequest, top_n: int = 5,
     for s in spaces:
         by_landlord[s["landlord"]].append(s)
 
-    area_label = (req.area.strip().title() + " ") if req.area else ""
+    _k = (req.area or "").strip().lower()
+    area_label = (AREA_LABELS.get(_k, _k.title()) + " ") if _k else ""
     results = []
     for name, sp in by_landlord.items():
         fitting = [s for s in sp if passes_hard_filters(s, req)]

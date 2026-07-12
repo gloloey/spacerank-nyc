@@ -14,7 +14,8 @@
           "index.html",
           "static/**",
           "embeddings.npz",
-          "models/**"
+          "models/**",
+          "building_images.json"
         ]
       }
     }

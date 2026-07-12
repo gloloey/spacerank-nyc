@@ -39,28 +39,60 @@ import semantic
 # ---------------------------------------------------------------------------
 WEIGHTS = {"type": 0.20, "size": 0.20, "budget": 0.15, "geo": 0.25, "semantic": 0.20}
 
-# Area name -> (lat, lng). Approximate centroids; good enough for ranking.
+# ---------------------------------------------------------------------------
+# AREAS: NYC office SUBMARKETS at consistent granularity (the standard CBRE/
+# JLL-style districts, ~1-2 km each) — replacing the earlier ad-hoc mix of
+# borough-sized blobs ("midtown") and micro-districts ("plaza district").
+# Keys are lowercase lookup ids; AREA_LABELS holds the display names;
+# AREA_GROUPS drives the grouped dropdown in the UI.
+# ---------------------------------------------------------------------------
 AREAS = {
-    "soho":             (40.7230, -74.0000),
-    "noho":             (40.7285, -73.9920),
-    "tribeca":          (40.7163, -74.0086),
-    "financial district": (40.7070, -74.0090),
-    "times square":     (40.7580, -73.9855),
-    "garment district": (40.7537, -73.9900),
-    "midtown":          (40.7549, -73.9840),
-    "plaza district":   (40.7625, -73.9722),
-    "chelsea":          (40.7465, -74.0014),
-    "flatiron":         (40.7411, -73.9897),
-    "nomad":            (40.7448, -73.9880),
-    "union square":     (40.7359, -73.9904),
-    "greenwich village": (40.7336, -73.9996),
-    "west village":     (40.7358, -74.0048),
-    "hudson square":    (40.7263, -74.0056),
-    "hell's kitchen":   (40.7638, -73.9918),
-    "long island city": (40.7447, -73.9485),
-    "williamsburg":     (40.7144, -73.9573),
-    "bronx":            (40.8175, -73.9185),
-    "jersey city":      (40.7178, -74.0431),
+    # Manhattan submarkets, south to north
+    "financial district":               (40.7075, -74.0113),
+    "tribeca":                          (40.7163, -74.0086),
+    "soho & noho":                      (40.7248, -73.9973),
+    "greenwich village & west village": (40.7340, -74.0014),
+    "chelsea & meatpacking":            (40.7440, -74.0000),
+    "flatiron & union square":          (40.7379, -73.9903),
+    "gramercy & nomad":                 (40.7420, -73.9845),
+    "penn district & garment":          (40.7519, -73.9911),
+    "times square & theater district":  (40.7580, -73.9855),
+    "grand central & murray hill":      (40.7513, -73.9765),
+    "plaza district":                   (40.7625, -73.9722),
+    "columbus circle & midtown west":   (40.7680, -73.9838),
+    # beyond Manhattan
+    "long island city":                 (40.7447, -73.9485),
+    "north brooklyn (williamsburg)":    (40.7144, -73.9573),
+    "brooklyn navy yard":               (40.7005, -73.9720),
+    "south bronx":                      (40.8175, -73.9185),
+    "jersey city":                      (40.7178, -74.0431),
+}
+AREA_LABELS = {
+    "financial district": "Financial District", "tribeca": "Tribeca",
+    "soho & noho": "SoHo & NoHo",
+    "greenwich village & west village": "Greenwich Village & West Village",
+    "chelsea & meatpacking": "Chelsea & Meatpacking",
+    "flatiron & union square": "Flatiron & Union Square",
+    "gramercy & nomad": "Gramercy & NoMad",
+    "penn district & garment": "Penn District & Garment",
+    "times square & theater district": "Times Square & Theater District",
+    "grand central & murray hill": "Grand Central & Murray Hill",
+    "plaza district": "Plaza District",
+    "columbus circle & midtown west": "Columbus Circle & Midtown West",
+    "long island city": "Long Island City",
+    "north brooklyn (williamsburg)": "North Brooklyn (Williamsburg)",
+    "brooklyn navy yard": "Brooklyn Navy Yard",
+    "south bronx": "South Bronx", "jersey city": "Jersey City",
+}
+AREA_GROUPS = {
+    "Manhattan": ["financial district", "tribeca", "soho & noho",
+                  "greenwich village & west village", "chelsea & meatpacking",
+                  "flatiron & union square", "gramercy & nomad",
+                  "penn district & garment", "times square & theater district",
+                  "grand central & murray hill", "plaza district",
+                  "columbus circle & midtown west"],
+    "Beyond Manhattan": ["long island city", "north brooklyn (williamsburg)",
+                         "brooklyn navy yard", "south bronx", "jersey city"],
 }
 
 
@@ -152,6 +184,15 @@ def score_geo(lat, lng, area):
 # ---------------------------------------------------------------------------
 _HERE = os.path.dirname(os.path.abspath(__file__))   # works locally AND deployed
 
+# building photo per slug, collected from each landlord's own site
+# (tools note: hotlinked, not redistributed; UI falls back to a monogram)
+try:
+    import json as _json
+    with open(os.path.join(_HERE, "building_images.json"), encoding="utf-8") as _f:
+        BUILDING_IMAGES = _json.load(_f)
+except Exception:
+    BUILDING_IMAGES = {}
+
 
 def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None):
     csv_path = csv_path or os.path.join(_HERE, "spaces_clean.csv")
@@ -194,6 +235,7 @@ def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None)
                         if isinstance(row["contact_email"], str) and row["contact_email"]
                         else str(row["contact_name"] or "")),
             "url": row["source_url"],
+            "image": BUILDING_IMAGES.get(row["source_url"].rstrip("/").split("/")[-1]),
             "lat": None if row["lat"] != row["lat"] else row["lat"],
             "lng": None if row["lng"] != row["lng"] else row["lng"],
             "year_built": None if row.get("year_built", float("nan")) != row.get("year_built", float("nan")) else int(row["year_built"]),

@@ -97,6 +97,21 @@ The saturation `n/(n+10)` gives diminishing returns instead of an arbitrary cap.
    as a known caveat.)
 5. **The scraped dataset is not republished.** It powers the app locally.
 
+## UI data notes (v0.5)
+
+- **Building photos** (`building_images.json`, 101/101 buildings): hotlinked
+  from each landlord's own site — GFP's `/property-images/{slug}.jpg` pattern
+  (51) + their API's hero images (8), Rudin's `og:image` (12), SL Green's
+  first content photo per page (30). Not redistributed; the UI falls back to
+  a monogram tile if a landlord moves a file.
+- **Landlord logos**: hotlinked (GFP svg, SL Green png) on dark chips; Rudin's
+  logo is CSS-drawn on their site with no image file, so it gets a monogram.
+- **Areas** were reworked from an ad-hoc mix ("midtown" next to "plaza
+  district") into 17 consistent office submarkets (CBRE/JLL-style, ~1-2 km
+  each), grouped Manhattan / Beyond Manhattan in the dropdown.
+- **Suggestion chips** prefill the meaning-match box with phrases the corpus
+  actually rewards; clicking × removes exactly the inserted phrase.
+
 ## Known data caveats
 
 - Only 33 of 135 spaces have a numeric rent; the rest are "Upon request"/"Negotiable".

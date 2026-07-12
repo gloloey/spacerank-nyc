@@ -8,7 +8,8 @@
 <style>
   :root {
     --ink: #14213d; --ink-soft: #4a5568; --paper: #f7f7f5; --card: #ffffff;
-    --accent: #0f6fff; --accent-soft: #e8f1ff; --good: #16a34a; --line: #e5e7eb;
+    --accent: #0f6fff; --accent-soft: #e8f1ff; --teal: #0d9488; --line: #e5e7eb;
+    --dark: #1c2536;
   }
   * { box-sizing: border-box; margin: 0; }
   body { font-family: "Segoe UI", system-ui, sans-serif; background: var(--paper);
@@ -32,10 +33,23 @@
     font: inherit; padding: 9px 10px; border: 1px solid var(--line);
     border-radius: 8px; background: #fff; width: 100%;
   }
-  textarea { resize: vertical; min-height: 42px; }
+  textarea { resize: vertical; min-height: 46px; }
   button { background: var(--accent); color: #fff; border: none; font-weight: 600;
            cursor: pointer; }
   button:hover { filter: brightness(1.08); }
+
+  /* ---- suggestion chips for the meaning-match box ---- */
+  .chips { grid-column: span 6; display: flex; flex-wrap: wrap; gap: 7px; margin-top: -6px; }
+  .chip { width: auto; background: #fff; color: var(--ink-soft); border: 1px solid var(--line);
+          border-radius: 999px; padding: 5px 12px; font-size: 0.82rem; font-weight: 500;
+          cursor: pointer; transition: all .12s; display: inline-flex; align-items: center; gap: 6px; }
+  .chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); filter: none; }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.on .x { display: inline-flex; }
+  .chip .x { display: none; width: 15px; height: 15px; border-radius: 50%;
+             background: rgba(255,255,255,.25); align-items: center; justify-content: center;
+             font-size: 0.72rem; line-height: 1; }
+  .chips-hint { grid-column: span 6; font-size: 0.72rem; color: var(--ink-soft); margin-top: -8px; }
 
   #map { height: 340px; border-radius: 14px; border: 1px solid var(--line);
          margin-top: 22px; display: none; }
@@ -44,13 +58,28 @@
   h2 { font-size: 1.05rem; margin-bottom: 10px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
           padding: 14px 16px; margin-bottom: 12px; }
+
+  /* ---- space card with photo + landlord logo ---- */
+  .srow { display: flex; gap: 14px; }
+  .thumb { width: 92px; height: 92px; border-radius: 10px; object-fit: cover;
+           flex-shrink: 0; background: var(--line); }
+  .thumb.mono { display: flex; align-items: center; justify-content: center;
+                background: var(--dark); color: #fff; font-weight: 800; font-size: 1.3rem; }
+  .smain { flex: 1; min-width: 0; }
   .row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
   .bname { font-weight: 700; }
   .suite { color: var(--ink-soft); font-size: 0.92rem; }
   .badge { background: var(--accent-soft); color: var(--accent); font-weight: 700;
            border-radius: 8px; padding: 3px 9px; white-space: nowrap; }
-  .meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.88rem;
-          color: var(--ink-soft); margin-top: 6px; }
+  .meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.88rem;
+          color: var(--ink-soft); margin-top: 6px; align-items: center; }
+  .llchip { display: inline-flex; align-items: center; gap: 6px; background: var(--dark);
+            border-radius: 999px; padding: 3px 10px 3px 6px; color: #e7ecf5;
+            font-size: 0.74rem; font-weight: 600; }
+  .llchip img { height: 13px; width: auto; display: block; }
+  .llchip .m { width: 16px; height: 16px; border-radius: 50%; background: var(--accent);
+               color: #fff; font-size: 0.62rem; font-weight: 800; display: flex;
+               align-items: center; justify-content: center; }
   .why { font-size: 0.85rem; color: var(--ink-soft); margin-top: 8px;
          border-top: 1px dashed var(--line); padding-top: 8px; }
   .contact { font-size: 0.88rem; margin-top: 8px; }
@@ -62,8 +91,10 @@
   .bar i b { position: absolute; inset: 0; width: var(--w); background: var(--accent);
              border-radius: 3px; }
   .bar span { font-size: 0.62rem; color: var(--ink-soft); text-transform: uppercase; }
+
+  /* ---- landlord card (three transparent signals) ---- */
   .ll-card .row1 .bname { font-size: 1.02rem; }
-  .tag { background: #eef7f4; color: #0d9488; border: 1px solid #b6e3d9; font-size: 0.66rem;
+  .tag { background: #eef7f4; color: var(--teal); border: 1px solid #b6e3d9; font-size: 0.66rem;
          font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap;
          text-transform: uppercase; letter-spacing: 0.04em; }
   .statrow { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
@@ -80,18 +111,20 @@
            position: relative; overflow: hidden; }
   .track b { position: absolute; inset: 0; width: var(--w); background: var(--accent);
              border-radius: 4px; }
-  .track.teal b { background: #0d9488; }
+  .track.teal b { background: var(--teal); }
   .sigreason { font-size: 0.8rem; color: var(--ink-soft); margin-top: 5px; }
   mark { background: #ccfbf1; color: #0f766e; padding: 0 3px; border-radius: 3px; }
-  .empty { color: var(--ink-soft); padding: 24px 4px; }
-  .foot { margin-top: 34px; font-size: 0.78rem; color: var(--ink-soft); }
+
   .num { display: inline-block; background: var(--accent); color: #fff; font-weight: 700;
          border-radius: 50%; width: 20px; height: 20px; text-align: center;
          font-size: 0.78rem; line-height: 20px; margin-right: 6px; }
+  .empty { color: var(--ink-soft); padding: 24px 4px; }
+  .foot { margin-top: 34px; font-size: 0.78rem; color: var(--ink-soft); }
   @media (max-width: 860px) {
     form { grid-template-columns: repeat(2, 1fr); }
-    .f-type, .f-area, .f-desc, .f-go { grid-column: span 2; }
+    .f-type, .f-area, .f-desc, .f-go, .chips, .chips-hint { grid-column: span 2; }
     .cols { grid-template-columns: 1fr; }
+    .thumb { width: 72px; height: 72px; }
   }
 </style>
 </head>
@@ -127,10 +160,12 @@
       <input id="budget" type="number" min="0" placeholder="55">
     </div>
     <div class="field f-desc">
-      <label for="q">Describe your ideal space (free text — this is the semantic part)</label>
+      <label for="q">Describe your ideal space (free text — matched by meaning)</label>
       <textarea id="q" placeholder="e.g. bright loft with exposed brick, strong foot traffic, near luxury retail…"></textarea>
     </div>
     <div class="field f-go"><button type="submit">Rank spaces</button></div>
+    <div class="chips" id="chips"></div>
+    <div class="chips-hint">Click to add to your description — click × to remove.</div>
   </form>
 
   <div id="map"></div>
@@ -147,22 +182,93 @@
   </div>
 
   <p class="foot">Data scraped from owner-operator websites (GFP Real Estate, Rudin Management,
-     SL Green) and enriched with NYC PLUTO. Scores are transparent relevance rankings on real
-     signals — never invented metrics. <span id="backend"></span></p>
+     SL Green) and enriched with NYC PLUTO. Photos &amp; logos load from each landlord's own site.
+     Scores are transparent relevance rankings on real signals — never invented metrics.
+     <span id="backend"></span></p>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 
-/* populate the area dropdown from the API so UI and engine never drift */
+function esc(s) {
+  const d = document.createElement("div");
+  d.textContent = s || "";
+  return d.innerHTML;
+}
+
+/* ================= landlord logos (hotlinked; monogram fallback) ========= */
+const LOGOS = {
+  "GFP Real Estate": "https://www.gfpre.com/svg/logo-gfp-white.svg",
+  "SL Green":        "https://slgreen.com/wp-content/uploads/2020/08/SLG-logo-rev.png",
+  /* Rudin's logo is CSS-drawn on their site (no image file) -> monogram */
+};
+function monogram(name) {
+  return esc((name || "?").split(/\s+/).map(w => w[0]).join("").slice(0, 3).toUpperCase());
+}
+function landlordChip(name) {
+  const src = LOGOS[name];
+  const inner = src
+    ? `<img src="${src}" alt="${esc(name)} logo" onerror="this.outerHTML='<span class=m>${monogram(name)}</span>'">`
+    : `<span class="m">${monogram(name)}</span>`;
+  return `<span class="llchip" title="${esc(name)}">${inner}${esc(name)}</span>`;
+}
+
+/* ================= suggestion chips for the meaning-match box ============ */
+const SUGGESTIONS = [
+  "lots of natural light", "high ceilings", "exposed brick and loft feel",
+  "column-free open floor", "renovated modern lobby", "landmark Art Deco building",
+  "great views of the skyline", "outdoor terrace", "steps from major subway lines",
+  "attended lobby 24/7", "on-site parking", "fitness center and amenities",
+  "furnished and move-in ready", "strong street foot traffic", "quiet side street",
+];
+function renderChips() {
+  $("chips").innerHTML = SUGGESTIONS.map((p, i) =>
+    `<button type="button" class="chip" data-i="${i}" id="chip${i}">
+       <span>${esc(p)}</span><span class="x">✕</span></button>`).join("");
+  SUGGESTIONS.forEach((p, i) => $("chip" + i).addEventListener("click", e => {
+    e.preventDefault();
+    hasPhrase(p) ? removePhrase(p) : addPhrase(p);
+    syncChips();
+  }));
+}
+function hasPhrase(p) { return $("q").value.toLowerCase().includes(p.toLowerCase()); }
+function addPhrase(p) {
+  const cur = $("q").value.trim();
+  /* joins naturally with whatever is already there */
+  $("q").value = cur === "" ? p : cur.replace(/[,\s]+$/, "") + ", " + p;
+}
+function removePhrase(p) {
+  /* delete exactly the phrase we inserted, then tidy leftover separators */
+  const re = new RegExp("(,\\s*)?" + p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  $("q").value = $("q").value.replace(re, "")
+    .replace(/^\s*,\s*/, "").replace(/,\s*,/g, ",").replace(/[,\s]+$/, "").trim();
+}
+function syncChips() {   /* chips stay honest even if the user edits by hand */
+  SUGGESTIONS.forEach((p, i) => $("chip" + i).classList.toggle("on", hasPhrase(p)));
+}
+
+/* ================= form -> API =========================================== */
 fetch("/api/areas").then(r => r.json()).then(d => {
-  for (const a of d.areas) {
-    const o = document.createElement("option");
-    o.value = a; o.textContent = a.replace(/\b\w/g, c => c.toUpperCase());
-    $("area").appendChild(o);
+  if (d.groups) {
+    for (const [group, entries] of Object.entries(d.groups)) {
+      const og = document.createElement("optgroup");
+      og.label = group;
+      for (const a of entries) {
+        const o = document.createElement("option");
+        o.value = a.key; o.textContent = a.label;
+        og.appendChild(o);
+      }
+      $("area").appendChild(og);
+    }
+  } else {
+    for (const a of d.areas) {
+      const o = document.createElement("option");
+      o.value = a; o.textContent = a;
+      $("area").appendChild(o);
+    }
   }
-  $("backend").textContent = "Semantic backend: " + d.semantic_backend + ".";
+  $("backend").textContent = "Text matching backend: " + d.semantic_backend + ".";
 });
 
 function params() {
@@ -178,43 +284,42 @@ const fmt = n => n && n === n ? Number(n).toLocaleString() : "n/a";
 
 function signalBars(sig) {
   const order = ["type", "size", "budget", "geo", "semantic"];
-  /* "text" not "semantic": the footer discloses the real backend, and we
-     don't claim semantic understanding when the tf-idf fallback is active */
   return `<div class="bars">` + order.map(k =>
     `<div class="bar"><i><b style="--w:${Math.round(100 * sig[k])}%"></b></i><span>${k === "semantic" ? "text" : k}</span></div>`
   ).join("") + `</div>`;
 }
 
+/* ================= space card: photo + logo + signals ==================== */
 function spaceCard(r, i) {
   const mail = r.contact.match(/<(.+)>/);
   const who = mail
-    ? `${r.contact.split("<")[0].trim()} — <a href="mailto:${mail[1]}">${mail[1]}</a>`
-    : `${r.contact} — <a href="${r.url}" target="_blank" rel="noopener">inquire via site</a>`;
+    ? `${esc(r.contact.split("<")[0].trim())} — <a href="mailto:${mail[1]}">${mail[1]}</a>`
+    : `${esc(r.contact)} — <a href="${r.url}" target="_blank" rel="noopener">inquire via site</a>`;
   const built = r.year_built ? `<span>built ${r.year_built}</span>` : "";
+  const photo = r.image
+    ? `<img class="thumb" src="${r.image}" alt="${esc(r.building)}" loading="lazy"
+          onerror="this.outerHTML='<div class=&quot;thumb mono&quot;>${monogram(r.building)}</div>'">`
+    : `<div class="thumb mono">${monogram(r.building)}</div>`;
   return `<div class="card">
-    <div class="row1">
-      <div><span class="num">${i + 1}</span><span class="bname">${r.building}</span><br>
-           <span class="suite">${r.suite}</span></div>
-      <span class="badge">${r.score}</span>
+    <div class="srow">
+      ${photo}
+      <div class="smain">
+        <div class="row1">
+          <div><span class="num">${i + 1}</span><span class="bname">${esc(r.building)}</span><br>
+               <span class="suite">${esc(r.suite)}</span></div>
+          <span class="badge">${r.score}</span>
+        </div>
+        <div class="meta">${landlordChip(r.landlord)}<span>${fmt(r.size_sqft)} sf</span>
+          <span>${esc(r.rent) || "rent on request"}</span>${built}<span>${esc(r.borough)}</span></div>
+        ${signalBars(r.signals)}
+      </div>
     </div>
-    <div class="meta"><span>${fmt(r.size_sqft)} sf</span><span>${r.rent || "rent on request"}</span>
-      ${built}<span>${r.borough}</span><span>${r.landlord}</span></div>
-    ${signalBars(r.signals)}
-    <div class="why">${r.reason}</div>
+    <div class="why">${esc(r.reason)}</div>
     <div class="contact">${who} · <a href="${r.url}" target="_blank" rel="noopener">listing ↗</a></div>
   </div>`;
 }
 
-function esc(s) {
-  const d = document.createElement("div");
-  d.textContent = s || "";
-  return d.innerHTML;
-}
-
-/* Landlord card: THREE transparent signals, deliberately NO combined score.
-   1. match_number  -> bold stat tile   ("Spaces that fit you")
-   2. specialization -> blue bar + reason ("Area & type expertise")
-   3. match_strength -> teal bar + reason with the matched phrase highlighted */
+/* ================= landlord card: three transparent signals ============== */
 function landlordCard(r) {
   const mail = r.contact.match(/<(.+)>/);
   const who = mail
@@ -223,10 +328,9 @@ function landlordCard(r) {
   const spec = r.specialization, str = r.match_strength;
   const specPct = Math.round(100 * spec.score);
   const strPct = str.score === null ? null : Math.round(100 * str.score);
-  /* highlight what actually matched: “…” -> <mark>…</mark> */
   const strReason = esc(str.reason).replace(/“([^”]+)”/g, "<mark>“$1”</mark>");
   return `<div class="card ll-card">
-    <div class="row1"><span class="bname">${esc(r.landlord)}</span>
+    <div class="row1"><span class="bname">${landlordChip(r.landlord)}</span>
       <span class="tag">${esc(r.contact_tag)}</span></div>
     <div class="statrow">
       <div class="stat"><b>${r.match_number}</b><span>Spaces that<br>fit you</span></div>
@@ -246,7 +350,7 @@ function landlordCard(r) {
   </div>`;
 }
 
-/* ---- the map: one numbered pin per ranked space ---- */
+/* ================= the map =============================================== */
 let map = null, markerLayer = null;
 function drawMap(results) {
   const pts = results.filter(r => r.lat && r.lng);
@@ -268,13 +372,17 @@ function drawMap(results) {
                     width:24px;height:24px;text-align:center;line-height:24px;
                     box-shadow:0 1px 4px rgba(0,0,0,.4)">${i + 1}</div>` });
     L.marker([r.lat, r.lng], { icon })
-      .bindPopup(`<b>${r.building}</b><br>${r.suite}<br>score ${r.score}`)
+      .bindPopup(`<b>${esc(r.building)}</b><br>${esc(r.suite)}<br>score ${r.score}`)
       .addTo(markerLayer);
     bounds.push([r.lat, r.lng]);
   });
   map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
   setTimeout(() => map.invalidateSize(), 100);
 }
+
+/* ================= wire-up =============================================== */
+renderChips();
+$("q").addEventListener("input", syncChips);
 
 $("f").addEventListener("submit", async e => {
   e.preventDefault();

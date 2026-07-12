@@ -50,7 +50,7 @@ def test_haversine_known_distance():
 def test_geo_neutral_when_ungeocode():
     """DESIGN DECISION: a building we couldn't geocode scores neutral,
     it does not crash the ranking with NaN."""
-    assert score_geo(NAN, NAN, "soho")[0] == 0.5
+    assert score_geo(NAN, NAN, "soho & noho")[0] == 0.5
     assert score_geo(40.72, -74.0, None)[0] == 0.5   # no area requested
     assert score_geo(40.72, -74.0, "atlantis")[0] == 0.5  # unknown area
 
@@ -67,13 +67,13 @@ def test_rank_spaces_shape_and_order():
 
 
 def test_rank_spaces_geo_actually_moves_ranking():
-    soho = rank_spaces(TenantRequest(property_type="Office", area="SoHo"), top_n=3)
-    mid  = rank_spaces(TenantRequest(property_type="Office", area="Midtown"), top_n=3)
+    soho = rank_spaces(TenantRequest(property_type="Office", area="soho & noho"), top_n=3)
+    mid  = rank_spaces(TenantRequest(property_type="Office", area="grand central & murray hill"), top_n=3)
     assert {r["building"] for r in soho} != {r["building"] for r in mid}
 
 
 def test_landlord_v2_shape_and_bounds():
-    res = rank_landlords(TenantRequest(property_type="Office", area="Midtown",
+    res = rank_landlords(TenantRequest(property_type="Office", area="penn district & garment",
                                        description="renovated lobby"))
     assert {r["landlord"] for r in res} == {"GFP Real Estate",
                                             "Rudin Management", "SL Green"}
@@ -116,6 +116,14 @@ def test_no_leased_or_residential_in_results():
     assert "25 Water Street" not in buildings         # residential, excluded
     for r in res:
         assert str(r["rent"]).strip().lower() != "leased"
+
+
+def test_every_result_has_image_or_none():
+    """Images come from building_images.json — a URL or None, never garbage."""
+    res = rank_spaces(TenantRequest(property_type="Office"), top_n=20)
+    for r in res:
+        assert r["image"] is None or r["image"].startswith("http")
+    assert sum(1 for r in res if r["image"]) >= 15   # coverage is ~100%
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse
 
 import semantic
 from landlord import rank_landlords
-from matching import AREAS, TenantRequest, rank_spaces
+from matching import AREA_GROUPS, AREA_LABELS, AREAS, TenantRequest, rank_spaces
 
 app = FastAPI(title="SpaceRank NYC", version="0.1",
               description="Commercial-space matching for NYC — ranked spaces "
@@ -54,7 +54,10 @@ def home():
 
 @app.get("/api/areas")
 def areas():
-    return {"areas": sorted(AREAS), "semantic_backend": semantic.BACKEND}
+    return {"areas": sorted(AREAS),                     # flat (back-compat)
+            "groups": {g: [{"key": k, "label": AREA_LABELS[k]} for k in ks]
+                       for g, ks in AREA_GROUPS.items()},
+            "semantic_backend": semantic.BACKEND}
 
 
 @app.get("/api/match")
