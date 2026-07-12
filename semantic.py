@@ -1,120 +1,201 @@
 """
-semantic.py — SpaceRank NYC: the "matching by meaning" layer
-=============================================================
-Gives the engine ONE function it can rely on:
+semantic.py — SpaceRank NYC: the "matching by meaning" layer (v2)
+=================================================================
+Gives the engine two functions:
 
-    scores = similarity(query_text, [description1, description2, ...])
-    # -> list of floats in [0, 1], one per description
+    scores = similarity(query, [text1, text2, ...])   # floats in [0, 1]
+    phrase, kind = explain(query, text)               # WHY it matched
 
-TWO BACKENDS, chosen automatically:
+THREE BACKENDS, tried in order at import time. BACKEND says which is live —
+the API and UI surface it, so nobody is ever told keyword matching is
+"semantic understanding".
 
-1. sentence-transformers (the real headline tech, used when installed):
-   Each text becomes an EMBEDDING — a vector of ~384 numbers that encodes its
-   MEANING, learned by a neural network from billions of sentences. Similar
-   meanings end up as nearby vectors, so "bright, good foot traffic" lands
-   close to "sunlit, busy pedestrian street" even with zero shared words.
-   Similarity = cosine of the angle between the two vectors.
+1. "embeddings (MiniLM, sentence-transformers)"  — full PyTorch, local dev.
+   Real embedding cosine similarity, model downloaded on first use.
+   Enable with:  python -m pip install sentence-transformers
 
-   Install on your machine (one-time, ~1-2 GB with PyTorch):
-       python -m pip install sentence-transformers
+2. "embeddings (MiniLM via ONNX, precomputed)"   — the deployed path.
+   The SAME MiniLM model, exported to quantized ONNX (~23 MB, in models/,
+   produced by the GitHub Action in .github/workflows/embeddings.yml).
+   All 400+ description vectors are PREcomputed offline into embeddings.npz
+   (~0.6 MB), so at request time we only embed the tenant's QUERY —
+   onnxruntime is a ~40 MB pip install, no PyTorch needed on serverless.
+   Descriptions not found in the precomputed file (e.g. freshly scraped)
+   are embedded on the fly with the same ONNX model — never faked.
 
-2. TF-IDF fallback (pure Python, always works, no installs):
-   A classic technique: each text becomes a vector of WORD WEIGHTS, where a
-   word counts more if it's frequent in this text but rare across all texts
-   (that's Term-Frequency × Inverse-Document-Frequency). Same cosine math,
-   but it can only match literal shared words — it is NOT semantic. It keeps
-   the pipeline runnable anywhere and is a great baseline to compare against.
+3. "tf-idf (keyword overlap — NOT semantic)"     — last-resort fallback.
+   From-scratch term-frequency × inverse-document-frequency + cosine.
+   It only matches literal shared words, and its label says so.
 
-The engine doesn't care which backend produced the score — that's the point
-of keeping this in its own module.
+The embedding math, in one breath: MiniLM turns a text into 384 numbers
+whose direction encodes MEANING (learned from ~1B sentence pairs). Mean-pool
+the token vectors, L2-normalize, and the dot product of two texts' vectors
+IS the cosine of the angle between them: 1 = same meaning, 0 = unrelated.
+That's how "sunlit" can match "bright" with zero shared letters.
 """
 
+import hashlib
 import math
+import os
 import re
 from collections import Counter
 
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_MODEL_DIR = os.path.join(_HERE, "models")
+_EMB_FILE = os.path.join(_HERE, "embeddings.npz")
+
+_MODE = None          # "st" | "onnx" | "tfidf"
+BACKEND = None        # human-readable, shown in the API + UI footer
+
+
+def _hash(text: str) -> str:
+    """Stable key for a description — how precomputed vectors are looked up."""
+    return hashlib.sha1(text.strip().encode("utf-8")).hexdigest()
+
+
 # ---------------------------------------------------------------------------
-# Backend 1: real embeddings (preferred)
+# Backend 1: sentence-transformers (full PyTorch — local development)
 # ---------------------------------------------------------------------------
 try:
-    from sentence_transformers import SentenceTransformer, util
-    _MODEL = SentenceTransformer("all-MiniLM-L6-v2")   # small, fast, solid
-    BACKEND = "sentence-transformers"
+    from sentence_transformers import SentenceTransformer
 
-    def similarity(query: str, texts: list[str]) -> list[float]:
-        """Embed everything once, then cosine-compare query vs each text."""
-        q_vec = _MODEL.encode(query, convert_to_tensor=True)
-        t_vecs = _MODEL.encode(texts, convert_to_tensor=True)
-        cos = util.cos_sim(q_vec, t_vecs)[0]           # values in [-1, 1]
-        return [(float(c) + 1) / 2 for c in cos]       # rescale to [0, 1]
+    _ST_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+    _MODE, BACKEND = "st", "embeddings (MiniLM, sentence-transformers)"
 
-# ---------------------------------------------------------------------------
-# Backend 2: TF-IDF + cosine, implemented from scratch (no dependencies)
-# ---------------------------------------------------------------------------
-except ImportError:
-    BACKEND = "tf-idf (fallback — install sentence-transformers for real embeddings)"
-
-    _STOP = set("the a an and or of to in on at for with is are was were be been "
-                "this that it its as by from has have had all also".split())
-
-    def _tokens(text: str) -> list[str]:
-        """Lowercase words, letters only, minus filler words."""
-        return [w for w in re.findall(r"[a-z]+", text.lower())
-                if w not in _STOP and len(w) > 2]
-
-    def similarity(query: str, texts: list[str]) -> list[float]:
-        docs = [_tokens(t) for t in texts]
-        q = _tokens(query)
-
-        # idf: log(N / how many docs contain the word) — rare words weigh more
-        n = len(docs) + 1
-        df = Counter()
-        for d in docs:
-            for w in set(d):
-                df[w] += 1
-        idf = {w: math.log(n / (1 + c)) + 1 for w, c in df.items()}
-
-        def vec(tokens):
-            tf = Counter(tokens)
-            total = max(1, len(tokens))
-            return {w: (c / total) * idf.get(w, 1.0) for w, c in tf.items()}
-
-        def cosine(a, b):
-            shared = set(a) & set(b)
-            num = sum(a[w] * b[w] for w in shared)
-            den = (math.sqrt(sum(x * x for x in a.values()))
-                   * math.sqrt(sum(x * x for x in b.values())))
-            return num / den if den else 0.0
-
-        qv = vec(q)
-        return [cosine(qv, vec(d)) for d in docs]
-
+    def _encode(texts):
+        return _ST_MODEL.encode(list(texts), convert_to_numpy=True,
+                                normalize_embeddings=True)
+except Exception:
+    pass
 
 # ---------------------------------------------------------------------------
-# explain(query, text) -> (phrase, kind)
-# Returns the piece of `text` that actually drove the similarity score, so
-# the UI can show WHY something matched instead of a bare number.
-#   embeddings backend -> the single sentence of `text` closest to the query
-#   TF-IDF backend     -> the actual overlapping keywords (honest: that IS
-#                         all TF-IDF matches on)
+# Backend 2: ONNX + precomputed vectors (the deployed path)
 # ---------------------------------------------------------------------------
-def _tokens_fallback(text):
-    return [w for w in re.findall(r"[a-z]+", text.lower()) if len(w) > 2]
+if _MODE is None:
+    try:
+        import numpy as _np
+        import onnxruntime as _ort
+        from tokenizers import Tokenizer as _Tokenizer
+
+        _tok = _Tokenizer.from_file(os.path.join(_MODEL_DIR, "tokenizer.json"))
+        _tok.enable_truncation(max_length=256)
+        _sess = _ort.InferenceSession(
+            os.path.join(_MODEL_DIR, "model_quantized.onnx"),
+            providers=["CPUExecutionProvider"])
+        _needs_type_ids = any(i.name == "token_type_ids"
+                              for i in _sess.get_inputs())
+        _pre = _np.load(_EMB_FILE, allow_pickle=False)
+        _PRECOMPUTED = dict(zip(_pre["hashes"].tolist(),
+                                _pre["vectors"].astype(_np.float32)))
+        _MODE = "onnx"
+        BACKEND = (f"embeddings (MiniLM via ONNX, "
+                   f"{len(_PRECOMPUTED)} descriptions precomputed)")
+
+        def _encode(texts):
+            """Tokenize -> run the transformer -> mean-pool -> L2-normalize.
+            This mirrors exactly what sentence-transformers does internally."""
+            encs = [_tok.encode(t if t.strip() else " ") for t in texts]
+            width = max(len(e.ids) for e in encs)
+            ids = _np.zeros((len(encs), width), dtype=_np.int64)
+            mask = _np.zeros_like(ids)
+            for i, e in enumerate(encs):
+                ids[i, :len(e.ids)] = e.ids
+                mask[i, :len(e.ids)] = 1
+            feeds = {"input_ids": ids, "attention_mask": mask}
+            if _needs_type_ids:
+                feeds["token_type_ids"] = _np.zeros_like(ids)
+            hidden = _sess.run(None, feeds)[0]           # (batch, tokens, 384)
+            m = mask[..., None].astype(hidden.dtype)
+            emb = (hidden * m).sum(axis=1) / m.sum(axis=1).clip(min=1e-9)
+            norms = _np.linalg.norm(emb, axis=1, keepdims=True).clip(min=1e-9)
+            return emb / norms
+    except Exception:
+        _MODE = None
+
+# ---------------------------------------------------------------------------
+# Backend 3: TF-IDF fallback (honest label: keyword overlap, NOT semantic)
+# ---------------------------------------------------------------------------
+if _MODE is None:
+    _MODE = "tfidf"
+    BACKEND = "tf-idf (keyword overlap — NOT semantic)"
+
+_STOP = set("the a an and or of to in on at for with is are was were be been "
+            "this that it its as by from has have had all also".split())
+
+
+def _tokens(text: str):
+    return [w for w in re.findall(r"[a-z]+", text.lower())
+            if w not in _STOP and len(w) > 2]
+
+
+def _tfidf_similarity(query, texts):
+    docs = [_tokens(t) for t in texts]
+    q = _tokens(query)
+    n = len(docs) + 1
+    df = Counter(w for d in docs for w in set(d))
+    idf = {w: math.log(n / (1 + c)) + 1 for w, c in df.items()}
+
+    def vec(tokens):
+        tf = Counter(tokens)
+        total = max(1, len(tokens))
+        return {w: (c / total) * idf.get(w, 1.0) for w, c in tf.items()}
+
+    def cosine(a, b):
+        num = sum(a[w] * b[w] for w in set(a) & set(b))
+        den = (math.sqrt(sum(x * x for x in a.values()))
+               * math.sqrt(sum(x * x for x in b.values())))
+        return num / den if den else 0.0
+
+    qv = vec(q)
+    return [cosine(qv, vec(d)) for d in docs]
+
+
+# ---------------------------------------------------------------------------
+# The public API — same two functions whatever the backend
+# ---------------------------------------------------------------------------
+def similarity(query: str, texts: list) -> list:
+    """One score in [0, 1] per text: how close is its MEANING to the query
+    (embedding backends) or its keyword profile (tf-idf fallback)."""
+    if _MODE == "tfidf":
+        return _tfidf_similarity(query, texts)
+
+    import numpy as np
+    q = _encode([query])[0]
+    if _MODE == "onnx":
+        # precomputed where possible; embed the stragglers on the fly
+        vecs, missing, where = [], [], []
+        for i, t in enumerate(texts):
+            v = _PRECOMPUTED.get(_hash(t))
+            vecs.append(v)
+            if v is None:
+                missing.append(t if t.strip() else " ")
+                where.append(i)
+        if missing:
+            fresh = _encode(missing)
+            for j, i in enumerate(where):
+                vecs[i] = fresh[j]
+        matrix = np.vstack(vecs)
+    else:                                    # "st": encode everything live
+        matrix = _encode([t if t.strip() else " " for t in texts])
+    cos = matrix @ q                         # normalized -> dot = cosine
+    return [float((c + 1) / 2) for c in cos]  # [-1,1] -> [0,1]
 
 
 def explain(query: str, text: str):
+    """(phrase, kind): the piece of `text` that drove the score.
+    Embedding backends -> the closest-in-MEANING sentence ("phrase").
+    TF-IDF            -> the literal shared keywords ("keywords")."""
     if not query.strip() or not text.strip():
         return "", "none"
-    if BACKEND.startswith("sentence"):
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if len(s.strip()) > 20]
+    if _MODE in ("st", "onnx"):
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text)
+                     if len(s.strip()) > 20][:40]
         if not sentences:
             return "", "none"
         scores = similarity(query, sentences)
-        best = sentences[max(range(len(scores)), key=lambda i: scores[i])]
+        best = sentences[max(range(len(scores)), key=scores.__getitem__)]
         return (best[:110] + "…") if len(best) > 110 else best, "phrase"
-    # TF-IDF fallback: which meaningful words are shared?
-    tok = _tokens if '_tokens' in globals() else _tokens_fallback
-    q_tokens = tok(query)
-    t_tokens = set(tok(text))
+    q_tokens = _tokens(query)
+    t_tokens = set(_tokens(text))
     shared = [w for w in dict.fromkeys(q_tokens) if w in t_tokens]
     return ", ".join(shared[:4]), "keywords"

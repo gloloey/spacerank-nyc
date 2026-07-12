@@ -37,6 +37,8 @@ Optional (real semantic matching): `python -m pip install sentence-transformers`
 | `app.py` | FastAPI wrapper: `/api/match`, `/api/landlords`, `/api/areas`, auto-docs at `/docs`, serves the UI at `/`. |
 | `static/index.html` | The tenant-facing single-file frontend: search form, ranked space cards with per-signal score bars, landlord panel, and a Leaflet results map with numbered pins. |
 | `scrape_slgreen.py` | Scraper for slgreen.com (landlord #3, WordPress/Divi) — the richest source: 224 units with rent/term/occupancy, real @slgreen.com leasing contacts (C&W brokers filtered out per the ownership-side rule). Quirks: units render 3x (desktop/mobile/details) and must be deduped; ~35 of the 66 dropdown entries are external marketing sites and are skipped; no coordinates (PLUTO supplies them). |
+| `tools/precompute_embeddings.py` | The offline half of the embedding backend: embeds every description with fp32 MiniLM, writes `embeddings.npz`, fetches the quantized ONNX export + tokenizer into `models/`. Run by CI or locally. |
+| `.github/workflows/embeddings.yml` | GitHub Action: re-runs the precompute whenever `spaces_clean.csv` changes and commits the artifacts — which triggers the normal Vercel deploy. No self-trigger loop (the bot commit touches only artifact paths). |
 | `test_engine.py` | 9 tests that pin down design decisions (neutral scores for unknowns, NaN-safe geo, descending order, landlord aggregation invariants). Run with `python test_engine.py` or pytest. |
 
 ## How the scoring works
@@ -52,7 +54,17 @@ score = 0.20*type + 0.20*size + 0.15*budget + 0.25*geo + 0.20*semantic
 - **geo** — haversine (great-circle) distance from the space's coordinates to
   the requested neighborhood's centroid; 1.0 within 0.5 km, 0 beyond 8 km
 - **semantic** — cosine similarity between the tenant's free text and the
-  building description (embeddings if available, TF-IDF otherwise)
+  building descriptions. THREE backends, auto-selected and disclosed by the
+  API (`semantic_backend`): (1) sentence-transformers MiniLM locally,
+  (2) **the deployed path**: descriptions precomputed offline into
+  `embeddings.npz` (~0.6 MB) by a GitHub Action, queries embedded at request
+  time by the same MiniLM quantized to ONNX (~23 MB in `models/`,
+  onnxruntime instead of PyTorch), (3) TF-IDF keyword overlap as last
+  resort — labeled "NOT semantic". Why precompute instead of Render/Railway:
+  zero migration and zero cost, faster requests (406 descriptions never
+  re-embedded), and free-tier Render sleeps between requests + 512 MB RAM
+  makes PyTorch painful. Tradeoff: embeddings refresh requires the Action
+  run (automatic on data pushes) rather than happening implicitly.
 
 Every result carries its per-signal scores and a reason string — a ranking you
 can't explain is a ranking you can't defend.

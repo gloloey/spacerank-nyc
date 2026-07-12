@@ -178,8 +178,10 @@ const fmt = n => n && n === n ? Number(n).toLocaleString() : "n/a";
 
 function signalBars(sig) {
   const order = ["type", "size", "budget", "geo", "semantic"];
+  /* "text" not "semantic": the footer discloses the real backend, and we
+     don't claim semantic understanding when the tf-idf fallback is active */
   return `<div class="bars">` + order.map(k =>
-    `<div class="bar"><i><b style="--w:${Math.round(100 * sig[k])}%"></b></i><span>${k}</span></div>`
+    `<div class="bar"><i><b style="--w:${Math.round(100 * sig[k])}%"></b></i><span>${k === "semantic" ? "text" : k}</span></div>`
   ).join("") + `</div>`;
 }
 

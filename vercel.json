@@ -12,7 +12,9 @@
           "landlord.py",
           "spaces_clean.csv",
           "index.html",
-          "static/**"
+          "static/**",
+          "embeddings.npz",
+          "models/**"
         ]
       }
     }

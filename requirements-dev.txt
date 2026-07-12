@@ -1,0 +1,8 @@
+# SpaceRank NYC — development / scraping / precompute extras
+-r requirements.txt
+requests
+beautifulsoup4
+lxml
+# real embeddings locally + the offline precompute tool:
+sentence-transformers
+huggingface_hub

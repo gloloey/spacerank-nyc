@@ -1,9 +1,11 @@
-# SpaceRank NYC — install with:  python -m pip install -r requirements.txt
-requests
-beautifulsoup4
-lxml
-pandas
+# SpaceRank NYC — RUNTIME dependencies (what the deployed app needs).
+# Scraper/dev extras live in requirements-dev.txt.
 fastapi
 uvicorn
-# optional but recommended — enables real semantic matching (large download):
+pandas
+numpy
+# query-time embedding encoder for the deployed semantic backend (~40 MB, no PyTorch):
+onnxruntime
+tokenizers
+# optional, LOCAL ONLY — full-precision embeddings via PyTorch (~2 GB):
 # sentence-transformers
