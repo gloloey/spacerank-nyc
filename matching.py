@@ -220,10 +220,11 @@ def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None)
             "score": round(100 * total, 1),
             "landlord": row["landlord"],
             "building": row["building_name"],
-            "suite": row["floor_suite"],
+            "suite": row["floor_suite"] if isinstance(row["floor_suite"], str) else "",
             # NaN is not valid JSON — the API layer needs None instead
             "size_sqft": None if row["size_sqft"] != row["size_sqft"] else row["size_sqft"],
-            "rent": row["rent"],
+            # empty rents parse as float NaN -> not JSON-safe; emit ""
+            "rent": row["rent"] if isinstance(row["rent"], str) else "",
             # raw numeric rent (NaN -> None): lets the landlord layer apply a
             # HARD budget filter on known rents instead of guessing from the
             # blended budget score (which is 0.5 for both "unknown" and
