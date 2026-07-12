@@ -1,0 +1,51 @@
+# Precomputes description embeddings + fetches the ONNX query encoder,
+# then commits both back to the repo. That commit triggers Vercel's normal
+# git deploy — so the live site picks up fresh embeddings automatically.
+#
+# Runs when the dataset changes (spaces_clean.csv), when this pipeline
+# changes, or on demand from the Actions tab (workflow_dispatch).
+# The bot commit only touches embeddings.npz + models/, which are NOT in
+# the paths filter below — no self-triggering loop.
+name: precompute-embeddings
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "spaces_clean.csv"
+      - "tools/precompute_embeddings.py"
+      - ".github/workflows/embeddings.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: embeddings
+  cancel-in-progress: true
+
+jobs:
+  precompute:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install torch-side tooling (runner only — never shipped)
+        run: pip install sentence-transformers huggingface_hub pandas numpy
+
+      - name: Precompute embeddings + fetch ONNX encoder
+        run: python tools/precompute_embeddings.py
+
+      - name: Commit artifacts back to main
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add embeddings.npz models/
+          git diff --cached --quiet || git commit -m "chore: refresh precomputed embeddings + ONNX encoder"
+          git push
+
