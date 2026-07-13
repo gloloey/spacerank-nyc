@@ -1,8 +1,8 @@
 {
- "refreshed_at": "2026-07-13T22:40:45Z",
- "total_rows": 457,
- "available_spaces": 406,
- "buildings": 101,
+ "refreshed_at": "2026-07-13T23:00:42Z",
+ "total_rows": 441,
+ "available_spaces": 388,
+ "buildings": 102,
  "buildings_with_availability": 71,
  "landlords": [
   "GFP Real Estate",
@@ -11,17 +11,17 @@
  ],
  "per_landlord": {
   "GFP Real Estate": {
-   "rows": 161,
-   "available": 130
+   "rows": 151,
+   "available": 120
   },
   "Rudin Management": {
-   "rows": 68,
-   "available": 68
+   "rows": 65,
+   "available": 65
   },
   "SL Green": {
-   "rows": 228,
-   "available": 208
+   "rows": 225,
+   "available": 203
   }
  },
- "pluto_source": "pluto_csv"
+ "pluto_source": "pluto_cache.json (snapshot \u2014 full PLUTO not on this machine)"
 }
