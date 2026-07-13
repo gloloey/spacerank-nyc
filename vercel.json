@@ -15,7 +15,8 @@
           "static/**",
           "embeddings.npz",
           "models/**",
-          "building_images.json"
+          "building_images.json",
+          "dataset_meta.json"
         ]
       }
     }

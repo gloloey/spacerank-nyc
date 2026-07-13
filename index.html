@@ -149,6 +149,40 @@
          font-size: 0.78rem; line-height: 20px; margin-right: 6px; }
   .empty { color: var(--ink-soft); padding: 24px 4px; }
   .foot { margin-top: 34px; font-size: 0.78rem; color: var(--ink-soft); }
+  /* ---- lead capture modal ---- */
+  .introbtn { display:inline-block; margin-left:8px; padding:3px 11px; border:0; cursor:pointer;
+    border-radius:999px; font:inherit; font-size:.78rem; font-weight:600;
+    background:var(--blue, #0f6fff); color:#fff; transition:filter .15s; }
+  .introbtn:hover { filter:brightness(1.12); }
+  .modalback { position:fixed; inset:0; background:rgba(10,16,28,.55); backdrop-filter:blur(3px);
+    display:none; align-items:center; justify-content:center; z-index:1000; padding:18px; }
+  .modalback.open { display:flex; animation:fadein .18s ease; }
+  @keyframes fadein { from{opacity:0} to{opacity:1} }
+  .modal { background:var(--card, #fff); border-radius:16px; width:min(480px, 100%);
+    max-height:92vh; overflow:auto; padding:22px 24px; box-shadow:0 24px 70px rgba(0,0,0,.35);
+    animation:pop .18s ease; }
+  @keyframes pop { from{transform:translateY(14px) scale(.98);opacity:0} to{transform:none;opacity:1} }
+  .modal h3 { margin:0 0 2px; font-size:1.05rem; }
+  .modal .sub { font-size:.8rem; color:var(--ink-soft); margin:0 0 14px; }
+  .modal label { display:block; font-size:.75rem; font-weight:600; color:var(--ink-soft);
+    margin:10px 0 4px; text-transform:uppercase; letter-spacing:.04em; }
+  .modal input, .modal textarea { width:100%; box-sizing:border-box; font:inherit;
+    padding:9px 11px; border:1px solid var(--line, #dbe2ee); border-radius:9px; background:transparent; color:inherit; }
+  .modal textarea { min-height:74px; resize:vertical; }
+  .modal input.bad, .modal textarea.bad { border-color:#e5484d; }
+  .fielderr { font-size:.74rem; color:#e5484d; margin-top:3px; min-height:1em; }
+  .lpills { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px; }
+  .lpill { font-size:.72rem; padding:3px 9px; border-radius:999px;
+    background:rgba(15,111,255,.1); color:var(--blue, #0f6fff); font-weight:600; }
+  .modalrow { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+  .modalrow .ghost { background:transparent; border:1px solid var(--line, #dbe2ee); color:inherit; }
+  .modalrow button { font:inherit; font-weight:600; border:0; border-radius:10px;
+    padding:9px 18px; cursor:pointer; background:var(--blue, #0f6fff); color:#fff; }
+  .modalrow button[disabled] { opacity:.55; cursor:wait; }
+  .leadok { text-align:center; padding:18px 4px 6px; }
+  .leadok .big { font-size:2rem; }
+  .leadok p { font-size:.86rem; color:var(--ink-soft); }
+  .modalerr { margin-top:12px; font-size:.8rem; color:#e5484d; display:none; }
   @media (max-width: 860px) {
     form { grid-template-columns: repeat(2, 1fr); }
     .f-type, .f-style, .f-term, .f-min, .f-max, .f-budget,
@@ -229,7 +263,7 @@
   <p class="foot">Data scraped from owner-operator websites (GFP Real Estate, Rudin Management,
      SL Green) and enriched with NYC PLUTO. Photos &amp; logos load from each landlord's own site.
      Scores are transparent relevance rankings on real signals — never invented metrics.
-     <span id="backend"></span></p>
+     <span id="fresh"></span> <span id="backend"></span></p>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -260,10 +294,12 @@ function landlordChip(name) {
 
 /* ================= multi-select area pills =============================== */
 const selectedAreas = new Set();
+const AREA_LOOKUP = {};
 function renderAreaPills(groups) {
   let html = "";
   for (const [group, entries] of Object.entries(groups)) {
     html += `<div class="areagroup"><div class="glabel">${esc(group)}</div><div class="pills">`;
+    entries.forEach(a => { AREA_LOOKUP[a.key] = a.label; });
     html += entries.map(a =>
       `<button type="button" class="pill" data-key="${esc(a.key)}">${esc(a.label)}</button>`).join("");
     html += `</div></div>`;
@@ -320,6 +356,12 @@ fetch("/api/areas").then(r => r.json()).then(d => {
     $("style").appendChild(o);
   }
   $("backend").textContent = "Text matching backend: " + d.semantic_backend + ".";
+  const ds = d.dataset || {};
+  if (ds.refreshed_at) {
+    const when = new Date(ds.refreshed_at).toLocaleDateString(undefined,
+      { year: "numeric", month: "short", day: "numeric" });
+    $("fresh").textContent = `Listings data as of ${when} — ${ds.available_spaces} available spaces across ${ds.buildings_with_availability} buildings, refreshed weekly.`;
+  }
 }).catch(() => { $("backend").textContent = "Could not load area list — refresh to retry."; });
 
 function params() {
@@ -410,12 +452,13 @@ function groupCard(g, i) {
     </div>
     ${suites}
     <div class="why">${esc(top.reason)}</div>
-    <div class="contact">${who} · <a href="${top.url}" target="_blank" rel="noopener">listing ↗</a></div>
+    <div class="contact">${who} · <a href="${top.url}" target="_blank" rel="noopener">listing ↗</a>
+      <button type="button" class="introbtn" onclick="openLead('g', ${i})">Request intro</button></div>
   </div>`;
 }
 
 /* ================= landlord card ========================================= */
-function landlordCard(r) {
+function landlordCard(r, i) {
   const mail = r.contact.match(/<(.+)>/);
   const who = mail
     ? `${esc(r.contact.split("<")[0].trim())} — <a href="mailto:${mail[1]}">${mail[1]}</a>`
@@ -445,7 +488,8 @@ function landlordCard(r) {
       <i class="track teal"><b style="--w:${strPct || 0}%"></b></i>
       <div class="sigreason">${strReason}</div>
     </div>
-    <div class="contact">${who}</div>
+    <div class="contact">${who}
+      <button type="button" class="introbtn" onclick="openLead('l', ${i})">Request intro</button></div>
   </div>`;
 }
 
@@ -528,7 +572,8 @@ $("f").addEventListener("submit", async e => {
         `${m.results.length} spaces ranked across ${allGroups.length} buildings — every listing is scored, even far-from-perfect ones, so keep scrolling.`;
       drawMap(allGroups);
     }
-    $("landlords").innerHTML = l.results.map(landlordCard).join("")
+    lastLandlords = l.results;
+    $("landlords").innerHTML = l.results.map((r, i) => landlordCard(r, i)).join("")
       || `<div class="empty">No landlords to rank.</div>`;
   } catch (err) {
     const msg = err.name === "AbortError"
@@ -541,6 +586,133 @@ $("f").addEventListener("submit", async e => {
     $("go").disabled = false;
   }
 });
+
+/* ================= lead capture ========================================== */
+/* Honest persistence: the serverless backend logs each lead as structured
+   JSON (retrievable in the host dashboard) — no fake "saved to database"
+   claim — and offers a prefilled email draft as a parallel channel. */
+let lastLandlords = [];
+let leadCtx = null;   // { interested_in, landlord, email }
+
+function searchPills() {
+  const pills = [`${$("type").value}`];
+  if ($("smin").value || $("smax").value)
+    pills.push(`${$("smin").value || "?"}–${$("smax").value || "?"} sq ft`);
+  if ($("budget").value) pills.push(`≤ $${$("budget").value}/SF/yr`);
+  selectedAreas.forEach(k => pills.push(AREA_LOOKUP[k] || k));
+  if ($("term").value) pills.push($("term").value === "short" ? "short lease" : "long lease (3+ yrs)");
+  if ($("q").value.trim()) pills.push(`“${$("q").value.trim().slice(0, 60)}”`);
+  return pills;
+}
+
+function openLead(kind, i) {
+  if (kind === 'g') {
+    const g = allGroups[i]; if (!g) return;
+    const mail = g.spaces[0].contact.match(/<(.+)>/);
+    leadCtx = { interested_in: g.building, landlord: g.landlord,
+                email: mail ? mail[1] : "" };
+    $("leadsub").textContent = `${g.building} · ${g.landlord} — goes to the ownership-side leasing contact.`;
+  } else {
+    const r = lastLandlords[i]; if (!r) return;
+    const mail = r.contact.match(/<(.+)>/);
+    leadCtx = { interested_in: r.landlord + " portfolio", landlord: r.landlord,
+                email: mail ? mail[1] : "" };
+    $("leadsub").textContent = `${r.landlord} — goes to their ownership-side leasing contact.`;
+  }
+  $("leadpills").innerHTML = searchPills().map(p => `<span class="lpill">${esc(p)}</span>`).join("");
+  $("leadform").style.display = "block"; $("leadok").style.display = "none";
+  $("leaderr").style.display = "none";
+  ["ld_name", "ld_email"].forEach(id => { $(id).classList.remove("bad"); });
+  $("e_name").textContent = $("e_email").textContent = "";
+  $("leadback").classList.add("open");
+  $("ld_name").focus();
+}
+function closeLead() { $("leadback").classList.remove("open"); }
+$("leadback").addEventListener("click", e => { if (e.target === $("leadback")) closeLead(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeLead(); });
+
+function leadSearchEcho() {
+  const o = { property_type: $("type").value };
+  if ($("smin").value) o.size_min = $("smin").value;
+  if ($("smax").value) o.size_max = $("smax").value;
+  if ($("budget").value) o.budget_max_psf = $("budget").value;
+  if (selectedAreas.size) o.areas = [...selectedAreas].join(", ");
+  if ($("term").value) o.term = $("term").value;
+  if ($("style").value) o.landlord_style = $("style").value;
+  if ($("q").value.trim()) o.description = $("q").value.trim();
+  return o;
+}
+
+async function sendLead() {
+  const name = $("ld_name").value.trim(), email = $("ld_email").value.trim();
+  let ok = true;
+  const flag = (id, eid, bad, msg) => {
+    $(id).classList.toggle("bad", bad); $(eid).textContent = bad ? msg : "";
+    if (bad) ok = false;
+  };
+  flag("ld_name", "e_name", name.length < 2, "Please enter your name.");
+  flag("ld_email", "e_email", !/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email),
+       "That doesn't look like a valid email.");
+  if (!ok) return;
+  $("leadsend").disabled = true; $("leaderr").style.display = "none";
+  try {
+    const r = await fetch("/api/leads", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email,
+        company: $("ld_company").value.trim(), message: $("ld_msg").value.trim(),
+        interested_in: leadCtx.interested_in, landlord: leadCtx.landlord,
+        search: leadSearchEcho() }),
+    });
+    if (!r.ok) throw new Error(`The server answered ${r.status}.`);
+    const d = await r.json();
+    $("leadform").style.display = "none"; $("leadok").style.display = "block";
+    $("leadokmsg").textContent = `Your request for ${leadCtx.interested_in} is in (ref ${d.lead_id}).`;
+    if (leadCtx.email) {
+      $("leadmailp").style.display = "block";
+      $("leadmail").href = `mailto:${leadCtx.email}?subject=${encodeURIComponent(
+        `Intro request: ${leadCtx.interested_in} (via SpaceRank NYC)`)}&body=${encodeURIComponent(
+        `Hello,\n\nI'm interested in ${leadCtx.interested_in}.\n\n` +
+        searchPills().map(p => "- " + p).join("\n") +
+        `\n\n${$("ld_msg").value.trim()}\n\n${name}${$("ld_company").value.trim() ? " — " + $("ld_company").value.trim() : ""}`)}`;
+    } else { $("leadmailp").style.display = "none"; }
+  } catch (err) {
+    $("leaderr").textContent = "⚠ Couldn't send the request (" + (err.message || "network error") +
+      ") — please try again" + (leadCtx.email ? ` or email ${leadCtx.email} directly.` : ".");
+    $("leaderr").style.display = "block";
+  } finally { $("leadsend").disabled = false; }
+}
+
 </script>
+<div class="modalback" id="leadback" role="dialog" aria-modal="true" aria-labelledby="leadtitle">
+  <div class="modal">
+    <div id="leadform">
+      <h3 id="leadtitle">Request an intro</h3>
+      <p class="sub" id="leadsub"></p>
+      <div class="lpills" id="leadpills"></div>
+      <label for="ld_name">Your name *</label>
+      <input id="ld_name" maxlength="120" autocomplete="name">
+      <div class="fielderr" id="e_name"></div>
+      <label for="ld_email">Work email *</label>
+      <input id="ld_email" maxlength="254" autocomplete="email" inputmode="email">
+      <div class="fielderr" id="e_email"></div>
+      <label for="ld_company">Company</label>
+      <input id="ld_company" maxlength="160" autocomplete="organization">
+      <label for="ld_msg">Anything else?</label>
+      <textarea id="ld_msg" maxlength="2000" placeholder="Timing, headcount, must-haves…"></textarea>
+      <div class="modalerr" id="leaderr"></div>
+      <div class="modalrow">
+        <button type="button" class="ghost" onclick="closeLead()">Cancel</button>
+        <button type="button" id="leadsend" onclick="sendLead()">Send request</button>
+      </div>
+    </div>
+    <div class="leadok" id="leadok" style="display:none">
+      <div class="big">✓</div>
+      <h3>Request received</h3>
+      <p id="leadokmsg"></p>
+      <p id="leadmailp" style="display:none">Prefer email? <a id="leadmail" href="#">Open a prefilled draft ↗</a></p>
+      <div class="modalrow" style="justify-content:center"><button type="button" onclick="closeLead()">Done</button></div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

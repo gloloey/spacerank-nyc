@@ -26,6 +26,8 @@ Run:  python clean_dataset.py
 """
 
 import glob
+import os
+from datetime import datetime, timezone
 import json
 import re
 
@@ -93,15 +95,22 @@ def parse_rent_psf(rent):
 
 
 def load_pluto():
-    """Only the columns we need, keyed by normalized address."""
+    """Only the columns we need, keyed by normalized address.
+    Returns None when manhattan_pluto.csv is absent (e.g. on a CI runner —
+    the 23 MB backbone isn't committed); callers fall back to pluto_cache.json,
+    a small committed snapshot of the enrichment produced last time the real
+    PLUTO file WAS available. Coordinates and year-built don't drift, so the
+    cache is an honest stand-in, and dataset_meta.json records which was used."""
+    if not os.path.exists("manhattan_pluto.csv"):
+        return None
     pluto = pd.read_csv("manhattan_pluto.csv",
                         usecols=["address", "yearbuilt", "numfloors",
                                  "bldgclass", "latitude", "longitude"],
                         low_memory=False)
     pluto = pluto.dropna(subset=["address"])
     pluto["addr_key"] = (pluto["address"].str.upper().str.strip()
-                         .str.replace("AVENUE OF THE AMERICAS", "AVENUE OF AMERICAS", regex=False))
-    # one row per address (a few lots share an address; keep the largest info)
+                         .str.replace("AVENUE OF THE AMERICAS",
+                                      "AVENUE OF AMERICAS", regex=False))
     return pluto.drop_duplicates("addr_key").set_index("addr_key")
 
 
@@ -115,12 +124,35 @@ def main():
     df["slug"] = df["source_url"].map(slug_of)
     df["addr_key"] = df["building_name"].map(normalize_address)
 
-    # --- PLUTO enrichment (by address, never by owner name) ---
-    matched = df["addr_key"].isin(pluto.index)
-    for src, dst in [("yearbuilt", "year_built"), ("numfloors", "floors"),
-                     ("bldgclass", "bldg_class"),
-                     ("latitude", "pluto_lat"), ("longitude", "pluto_lng")]:
-        df[dst] = df["addr_key"].map(pluto[src])
+    # --- PLUTO enrichment (by address, never by owner name) ---------------
+    # Two paths, honestly recorded in dataset_meta.json:
+    #   * manhattan_pluto.csv present  -> real join, and we SNAPSHOT the
+    #     enrichment into pluto_cache.json (small, committed)
+    #   * absent (CI runner)           -> reuse that snapshot; coordinates and
+    #     year-built don't drift between weekly runs
+    cols = [("yearbuilt", "year_built"), ("numfloors", "floors"),
+            ("bldgclass", "bldg_class"),
+            ("latitude", "pluto_lat"), ("longitude", "pluto_lng")]
+    if pluto is not None:
+        pluto_source = "pluto_csv"
+        matched = df["addr_key"].isin(pluto.index)
+        for src, dst in cols:
+            df[dst] = df["addr_key"].map(pluto[src])
+        cache = {}
+        for key in sorted(set(df.loc[matched, "addr_key"])):
+            row = pluto.loc[key]
+            cache[key] = {src: (None if pd.isna(row[src]) else
+                                (float(row[src]) if src != "bldgclass" else str(row[src])))
+                          for src, _ in cols}
+        with open("pluto_cache.json", "w", encoding="utf-8") as f:
+            json.dump(cache, f, indent=1)
+    else:
+        pluto_source = "pluto_cache.json (snapshot — full PLUTO not on this machine)"
+        with open("pluto_cache.json", encoding="utf-8") as f:
+            cache = json.load(f)
+        matched = df["addr_key"].isin(cache)
+        for src, dst in cols:
+            df[dst] = df["addr_key"].map(lambda k, s=src: cache.get(k, {}).get(s))
 
     # --- coordinates: scraper-inline > GFP coords file > PLUTO > hood centroid ---
     if "lat" not in df.columns:
@@ -157,6 +189,24 @@ def main():
     df["size_sqft"] = pd.to_numeric(df["size_sqft"], errors="coerce")
 
     df.to_csv("spaces_clean.csv", index=False)
+
+    # --- dataset_meta.json: the freshness stamp the API + UI display -------
+    avail = df[df["is_available"]]
+    meta = {
+        "refreshed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "total_rows": int(len(df)),
+        "available_spaces": int(df["is_available"].sum()),
+        "buildings": int(df.groupby("building_name").ngroups),
+        "buildings_with_availability": int(avail.groupby("building_name").ngroups),
+        "landlords": sorted(df["landlord"].dropna().unique().tolist()),
+        "per_landlord": {k: {"rows": int(v["count"]), "available": int(v["sum"])}
+                         for k, v in df.groupby("landlord")["is_available"]
+                                       .agg(["count", "sum"]).iterrows()},
+        "pluto_source": pluto_source,
+    }
+    with open("dataset_meta.json", "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=1)
+    print("wrote dataset_meta.json (refreshed_at " + meta["refreshed_at"] + ")")
 
     n_bldg = df.groupby("building_name").ngroups
     n_join = df[matched].groupby("building_name").ngroups

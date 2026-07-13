@@ -39,7 +39,10 @@ Optional (real semantic matching): `python -m pip install sentence-transformers`
 | `scrape_slgreen.py` | Scraper for slgreen.com (landlord #3, WordPress/Divi) — the richest source: 224 units with rent/term/occupancy, real @slgreen.com leasing contacts (C&W brokers filtered out per the ownership-side rule). Quirks: units render 3x (desktop/mobile/details) and must be deduped; ~35 of the 66 dropdown entries are external marketing sites and are skipped; no coordinates (PLUTO supplies them). |
 | `tools/precompute_embeddings.py` | The offline half of the embedding backend: embeds every description with fp32 MiniLM, writes `embeddings.npz`, fetches the quantized ONNX export + tokenizer into `models/`. Run by CI or locally. |
 | `.github/workflows/embeddings.yml` | GitHub Action: re-runs the precompute whenever `spaces_clean.csv` changes and commits the artifacts — which triggers the normal Vercel deploy. No self-trigger loop (the bot commit touches only artifact paths). |
-| `test_engine.py` | 9 tests that pin down design decisions (neutral scores for unknowns, NaN-safe geo, descending order, landlord aggregation invariants). Run with `python test_engine.py` or pytest. |
+| `dataset_meta.json` | The freshness stamp: written by `clean_dataset.py` on every run (refresh time, per-landlord counts, which PLUTO source was used). Served inside `/api/areas`; the UI footer renders it as "Listings data as of …". |
+| `pluto_cache.json` | A small committed snapshot of the PLUTO enrichment (address key -> coords/year built/floors/class). Lets `clean_dataset.py` run on CI runners where the 23 MB `manhattan_pluto.csv` backbone isn't available — verified to reproduce `spaces_clean.csv` byte-identically. |
+| `.github/workflows/refresh_data.yml` | The self-updating dataset: every Monday (or on demand) re-runs all three scrapers + the cleaner on a GitHub runner, refuses to commit if any landlord's rows collapse below 50% of the previous run (site redesigns fail loudly, never silently wipe data), then explicitly dispatches the embeddings workflow (GITHUB_TOKEN pushes don't fire on-push workflows) which chains the deploy. |
+| `test_engine.py` | 22 tests that pin down design decisions (neutral scores for unknowns, NaN-safe geo, descending order, landlord aggregation invariants). Run with `python test_engine.py` or pytest. |
 
 ## How the scoring works
 
@@ -139,6 +142,26 @@ The saturation `n/(n+10)` gives diminishing returns instead of an arbitrary cap.
 - 4 rows say "Leased" — kept in the CSV, excluded by `is_available`.
 - 7 GFP properties are residential/other (SoMA, student housing, co-ops) — kept, tagged `building_use = residential/other`, excluded from matching.
 - `address` = building name (street address); Jersey City / outer-borough rows carry it in `borough`.
+
+## v0.7 — freshness + lead capture
+
+- **Data freshness, end to end**: `clean_dataset.py` stamps every run into
+  `dataset_meta.json`, the API exposes it, the UI footer shows "Listings data
+  as of {date} — N spaces across M buildings, refreshed weekly", and the
+  weekly `refresh-data` Action makes the sentence true without anyone
+  touching the project.
+- **Lead capture — with honest persistence**: "Request intro" on every
+  building card and landlord card opens a modal (the tenant's search attached
+  as pills, client + server validation). `POST /api/leads` validates with
+  Pydantic (name/email required, all fields length-bounded, the search echo
+  capped at 12 keys x 200 chars so a hostile client can't log megabytes) and
+  emits one structured JSON line ("SPACERANK_LEAD") to stdout — retrievable
+  in the Vercel dashboard logs. Serverless has no writable durable disk and
+  this project stores no secrets, so we say exactly that instead of
+  pretending there's a database; the success screen also offers a prefilled
+  email draft to the ownership-side contact as a parallel channel. Durable
+  storage (Vercel KV / Postgres) is the documented next step and needs a
+  credential.
 
 ## Roadmap position
 

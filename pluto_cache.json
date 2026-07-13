@@ -1,0 +1,401 @@
+{
+ "10 EAST 53 STREET": {
+  "yearbuilt": 1971.0,
+  "numfloors": 38.0,
+  "bldgclass": "O4",
+  "latitude": 40.7598129,
+  "longitude": -73.9753169
+ },
+ "100 CHURCH STREET": {
+  "yearbuilt": 1959.0,
+  "numfloors": 22.0,
+  "bldgclass": "RC",
+  "latitude": 40.713286,
+  "longitude": -74.0101362
+ },
+ "100 PARK AVENUE": {
+  "yearbuilt": 1950.0,
+  "numfloors": 36.0,
+  "bldgclass": "O4",
+  "latitude": 40.7513406,
+  "longitude": -73.9789257
+ },
+ "11 MADISON AVENUE": {
+  "yearbuilt": 1932.0,
+  "numfloors": 30.0,
+  "bldgclass": "RB",
+  "latitude": 40.7415128,
+  "longitude": -73.9864854
+ },
+ "125 PARK AVENUE": {
+  "yearbuilt": 1923.0,
+  "numfloors": 24.0,
+  "bldgclass": "O4",
+  "latitude": 40.751601,
+  "longitude": -73.9775144
+ },
+ "125 WEST 3 STREET": {
+  "yearbuilt": 1920.0,
+  "numfloors": 3.0,
+  "bldgclass": "C7",
+  "latitude": 40.7308584,
+  "longitude": -74.0004943
+ },
+ "136 EAST 55 STREET": {
+  "yearbuilt": 1957.0,
+  "numfloors": 15.0,
+  "bldgclass": "D6",
+  "latitude": 40.7592462,
+  "longitude": -73.9698846
+ },
+ "1430 BROADWAY": {
+  "yearbuilt": 1954.0,
+  "numfloors": 22.0,
+  "bldgclass": "O4",
+  "latitude": 40.7539108,
+  "longitude": -73.986436
+ },
+ "149 WEST 36 STREET": {
+  "yearbuilt": 1909.0,
+  "numfloors": 12.0,
+  "bldgclass": "O6",
+  "latitude": 40.752094,
+  "longitude": -73.9886885
+ },
+ "1515 BROADWAY": {
+  "yearbuilt": 1970.0,
+  "numfloors": 54.0,
+  "bldgclass": "O4",
+  "latitude": 40.7579291,
+  "longitude": -73.9864388
+ },
+ "1675 BROADWAY": {
+  "yearbuilt": 1987.0,
+  "numfloors": 35.0,
+  "bldgclass": "O4",
+  "latitude": 40.7631025,
+  "longitude": -73.9835462
+ },
+ "17 BATTERY PLACE": {
+  "yearbuilt": 1902.0,
+  "numfloors": 31.0,
+  "bldgclass": "RM",
+  "latitude": 40.7056,
+  "longitude": -74.0158373
+ },
+ "175 MADISON AVENUE": {
+  "yearbuilt": 1914.0,
+  "numfloors": 5.0,
+  "bldgclass": "C7",
+  "latitude": 40.7472598,
+  "longitude": -73.9829727
+ },
+ "185 BROADWAY": {
+  "yearbuilt": 2019.0,
+  "numfloors": 33.0,
+  "bldgclass": "RM",
+  "latitude": 40.7104013,
+  "longitude": -74.0100203
+ },
+ "200 VARICK STREET": {
+  "yearbuilt": 1926.0,
+  "numfloors": 12.0,
+  "bldgclass": "RC",
+  "latitude": 40.7282535,
+  "longitude": -74.0047914
+ },
+ "206 5 AVENUE": {
+  "yearbuilt": 1857.0,
+  "numfloors": 5.0,
+  "bldgclass": "O5",
+  "latitude": 40.7432065,
+  "longitude": -73.9888019
+ },
+ "209 WEST 38 STREET": {
+  "yearbuilt": 1910.0,
+  "numfloors": 12.0,
+  "bldgclass": "O6",
+  "latitude": 40.753966,
+  "longitude": -73.9892766
+ },
+ "215 PARK AVENUE SOUTH": {
+  "yearbuilt": 1910.0,
+  "numfloors": 20.0,
+  "bldgclass": "O4",
+  "latitude": 40.7368084,
+  "longitude": -73.9882726
+ },
+ "220 EAST 42 STREET": {
+  "yearbuilt": 1928.0,
+  "numfloors": 37.0,
+  "bldgclass": "RC",
+  "latitude": 40.7497694,
+  "longitude": -73.9731804
+ },
+ "247 WEST 37 STREET": {
+  "yearbuilt": 1924.0,
+  "numfloors": 18.0,
+  "bldgclass": "O6",
+  "latitude": 40.7539771,
+  "longitude": -73.991222
+ },
+ "280 PARK AVENUE": {
+  "yearbuilt": 1962.0,
+  "numfloors": 28.0,
+  "bldgclass": "O4",
+  "latitude": 40.7564176,
+  "longitude": -73.9750944
+ },
+ "295 CENTRAL PARK WEST": {
+  "yearbuilt": 1941.0,
+  "numfloors": 19.0,
+  "bldgclass": "D3",
+  "latitude": 40.7877854,
+  "longitude": -73.9679072
+ },
+ "3 TIMES SQUARE": {
+  "yearbuilt": 1999.0,
+  "numfloors": 32.0,
+  "bldgclass": "O4",
+  "latitude": 40.7565705,
+  "longitude": -73.9870671
+ },
+ "304 PARK AVENUE SOUTH": {
+  "yearbuilt": 1930.0,
+  "numfloors": 12.0,
+  "bldgclass": "O6",
+  "latitude": 40.7401459,
+  "longitude": -73.9869656
+ },
+ "307 WEST 36 STREET": {
+  "yearbuilt": 1926.0,
+  "numfloors": 18.0,
+  "bldgclass": "O6",
+  "latitude": 40.7540376,
+  "longitude": -73.9929076
+ },
+ "315 WEST 33 STREET": {
+  "yearbuilt": 2000.0,
+  "numfloors": 33.0,
+  "bldgclass": "D6",
+  "latitude": 40.7522619,
+  "longitude": -73.994615
+ },
+ "318 WEST 39 STREET": {
+  "yearbuilt": 1915.0,
+  "numfloors": 12.0,
+  "bldgclass": "O6",
+  "latitude": 40.7556241,
+  "longitude": -73.9924634
+ },
+ "322 8 AVENUE": {
+  "yearbuilt": 1925.0,
+  "numfloors": 21.0,
+  "bldgclass": "O4",
+  "latitude": 40.7472089,
+  "longitude": -73.9966292
+ },
+ "330 7 AVENUE": {
+  "yearbuilt": 1929.0,
+  "numfloors": 21.0,
+  "bldgclass": "O4",
+  "latitude": 40.7477659,
+  "longitude": -73.9933738
+ },
+ "333 HUDSON STREET": {
+  "yearbuilt": 1925.0,
+  "numfloors": 10.0,
+  "bldgclass": "O9",
+  "latitude": 40.7271335,
+  "longitude": -74.0076885
+ },
+ "333 WEST 39 STREET": {
+  "yearbuilt": 1929.0,
+  "numfloors": 14.0,
+  "bldgclass": "O6",
+  "latitude": 40.7561675,
+  "longitude": -73.9925897
+ },
+ "345 PARK AVENUE": {
+  "yearbuilt": 1969.0,
+  "numfloors": 44.0,
+  "bldgclass": "O4",
+  "latitude": 40.7577537,
+  "longitude": -73.9724264
+ },
+ "353 WEST 39 STREET": {
+  "yearbuilt": 1928.0,
+  "numfloors": 14.0,
+  "bldgclass": "O6",
+  "latitude": 40.7564558,
+  "longitude": -73.9932827
+ },
+ "40 EXCHANGE PLACE": {
+  "yearbuilt": 1902.0,
+  "numfloors": 20.0,
+  "bldgclass": "O4",
+  "latitude": 40.7056858,
+  "longitude": -74.0102865
+ },
+ "40 PARK AVENUE": {
+  "yearbuilt": 1950.0,
+  "numfloors": 19.0,
+  "bldgclass": "D6",
+  "latitude": 40.7487251,
+  "longitude": -73.9807347
+ },
+ "420 LEXINGTON AVENUE": {
+  "yearbuilt": 1927.0,
+  "numfloors": 31.0,
+  "bldgclass": "RC",
+  "latitude": 40.7526959,
+  "longitude": -73.975861
+ },
+ "420 WEST 45 STREET": {
+  "yearbuilt": 1910.0,
+  "numfloors": 7.0,
+  "bldgclass": "O3",
+  "latitude": 40.7605975,
+  "longitude": -73.9923907
+ },
+ "450 PARK AVENUE": {
+  "yearbuilt": 1972.0,
+  "numfloors": 32.0,
+  "bldgclass": "O4",
+  "latitude": 40.7614945,
+  "longitude": -73.9713275
+ },
+ "461 5 AVENUE": {
+  "yearbuilt": 1988.0,
+  "numfloors": 26.0,
+  "bldgclass": "O4",
+  "latitude": 40.7522303,
+  "longitude": -73.9813545
+ },
+ "485 LEXINGTON AVENUE": {
+  "yearbuilt": 1957.0,
+  "numfloors": 30.0,
+  "bldgclass": "O4",
+  "latitude": 40.7540787,
+  "longitude": -73.9734891
+ },
+ "500 PARK AVENUE": {
+  "yearbuilt": 1960.0,
+  "numfloors": 11.0,
+  "bldgclass": "O6",
+  "latitude": 40.7628941,
+  "longitude": -73.9703558
+ },
+ "515 MADISON AVENUE": {
+  "yearbuilt": 1931.0,
+  "numfloors": 42.0,
+  "bldgclass": "O4",
+  "latitude": 40.7597302,
+  "longitude": -73.9736854
+ },
+ "520 8 AVENUE": {
+  "yearbuilt": 1926.0,
+  "numfloors": 24.0,
+  "bldgclass": "O4",
+  "latitude": 40.7535737,
+  "longitude": -73.9918826
+ },
+ "560 LEXINGTON AVENUE": {
+  "yearbuilt": 1980.0,
+  "numfloors": 22.0,
+  "bldgclass": "O4",
+  "latitude": 40.7568589,
+  "longitude": -73.9726398
+ },
+ "589 8 AVENUE": {
+  "yearbuilt": 1927.0,
+  "numfloors": 23.0,
+  "bldgclass": "O4",
+  "latitude": 40.7553358,
+  "longitude": -73.99159
+ },
+ "630 9 AVENUE": {
+  "yearbuilt": 1929.0,
+  "numfloors": 13.0,
+  "bldgclass": "O6",
+  "latitude": 40.759914,
+  "longitude": -73.9911635
+ },
+ "641 LEXINGTON AVENUE": {
+  "yearbuilt": 1964.0,
+  "numfloors": 32.0,
+  "bldgclass": "O4",
+  "latitude": null,
+  "longitude": null
+ },
+ "65 EAST 55 STREET": {
+  "yearbuilt": 1986.0,
+  "numfloors": 37.0,
+  "bldgclass": "O4",
+  "latitude": 40.7608853,
+  "longitude": -73.9721327
+ },
+ "71 THOMAS STREET": {
+  "yearbuilt": 1891.0,
+  "numfloors": 7.0,
+  "bldgclass": "O6",
+  "latitude": 40.7171124,
+  "longitude": -74.0074601
+ },
+ "711 3 AVENUE": {
+  "yearbuilt": 1956.0,
+  "numfloors": 19.0,
+  "bldgclass": "O6",
+  "latitude": 40.75216,
+  "longitude": -73.9728258
+ },
+ "740 BROADWAY": {
+  "yearbuilt": 1910.0,
+  "numfloors": 12.0,
+  "bldgclass": "O6",
+  "latitude": 40.7296861,
+  "longitude": -73.9923401
+ },
+ "750 3 AVENUE": {
+  "yearbuilt": 1957.0,
+  "numfloors": 34.0,
+  "bldgclass": "O4",
+  "latitude": 40.7538562,
+  "longitude": -73.9728142
+ },
+ "767 LEXINGTON AVENUE": {
+  "yearbuilt": 1931.0,
+  "numfloors": 6.0,
+  "bldgclass": "O5",
+  "latitude": 40.7629866,
+  "longitude": -73.9674174
+ },
+ "80 8 AVENUE": {
+  "yearbuilt": 1930.0,
+  "numfloors": 20.0,
+  "bldgclass": "O4",
+  "latitude": 40.7398584,
+  "longitude": -74.0020533
+ },
+ "800 3 AVENUE": {
+  "yearbuilt": 1970.0,
+  "numfloors": 41.0,
+  "bldgclass": "O4",
+  "latitude": 40.7556345,
+  "longitude": -73.9713553
+ },
+ "825 8 AVENUE": {
+  "yearbuilt": 1987.0,
+  "numfloors": 49.0,
+  "bldgclass": "O4",
+  "latitude": 40.7622302,
+  "longitude": -73.9869433
+ },
+ "919 3 AVENUE": {
+  "yearbuilt": 1970.0,
+  "numfloors": 46.0,
+  "bldgclass": "O4",
+  "latitude": 40.7589628,
+  "longitude": -73.967589
+ }
+}

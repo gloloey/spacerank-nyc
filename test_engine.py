@@ -192,6 +192,54 @@ def test_deep_ranking_returns_everything():
     assert scores == sorted(scores, reverse=True)
 
 
+# --------------------------------------------------------------------------
+# v0.7: freshness metadata + lead capture (API-level, via TestClient)
+# --------------------------------------------------------------------------
+
+def _client():
+    from fastapi.testclient import TestClient
+    import app as app_module
+    return TestClient(app_module.app)
+
+
+def test_areas_exposes_dataset_freshness():
+    """/api/areas must carry the dataset stamp the UI footer displays."""
+    d = _client().get("/api/areas").json()
+    ds = d["dataset"]
+    assert ds["refreshed_at"].endswith("Z")
+    assert ds["available_spaces"] >= 400
+    assert ds["buildings_with_availability"] >= 50
+    assert set(ds["per_landlord"]) == set(ds["landlords"])
+
+
+def test_lead_valid_is_accepted_and_echoed_safely():
+    r = _client().post("/api/leads", json={
+        "name": "Test Tenant", "email": "tenant@example.com",
+        "company": "ACME", "message": "hello",
+        "interested_in": "171 Madison Avenue", "landlord": "GFP Real Estate",
+        "search": {"property_type": "Office", "term": "long"}})
+    assert r.status_code == 201
+    body = r.json()
+    assert body["ok"] and len(body["lead_id"]) == 12
+    assert "log" in body["stored"]            # honest about persistence
+
+
+def test_lead_rejects_bad_input():
+    c = _client()
+    assert c.post("/api/leads", json={"name": "X Y", "email": "nope"}).status_code == 422
+    assert c.post("/api/leads", json={"email": "a@b.co"}).status_code == 422
+    assert c.post("/api/leads", json={"name": "A", "email": "a@b.co"}).status_code == 422  # 1-char name
+
+
+def test_lead_bounds_hostile_search_payload():
+    """A hostile client can't log megabytes through the search echo."""
+    r = _client().post("/api/leads", json={
+        "name": "AB", "email": "a@b.co",
+        "search": {str(i): "x" * 10000 for i in range(60)}})
+    assert r.status_code == 201                # accepted, but bounded:
+    # (the bounding itself is a validator — 12 keys x 200 chars max)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

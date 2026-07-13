@@ -6,3 +6,4 @@ lxml
 # real embeddings locally + the offline precompute tool:
 sentence-transformers
 huggingface_hub
+httpx
