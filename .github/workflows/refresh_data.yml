@@ -7,10 +7,12 @@
 #      (PLUTO enrichment from the committed pluto_cache.json snapshot;
 #      missing coordinates geocoded live via the free NYC GeoSearch API
 #      and cached in geocode_cache.json)
-#   3. SANITY GUARD: refuse to commit if any known landlord's row count
+#   3. retrain the rent-estimate model on the fresh published rents
+#      (price_model.py is self-gating: it refuses to ship on weak data)
+#   4. SANITY GUARD: refuse to commit if any known landlord's row count
 #      collapsed below 50% of the previous run — a redesigned website
 #      should fail loudly here, not silently wipe the dataset
-#   4. commit the fresh CSVs — then explicitly dispatch embeddings.yml
+#   5. commit the fresh CSVs — then explicitly dispatch embeddings.yml
 #      (GITHUB_TOKEN pushes don't fire on-push workflows) — which triggers
 #      the normal Vercel deploy.
 
@@ -37,7 +39,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install scraper deps
-        run: pip install requests beautifulsoup4 lxml pandas
+        run: pip install requests beautifulsoup4 lxml pandas numpy
 
       - name: Snapshot previous per-landlord counts
         run: |
@@ -58,6 +60,9 @@ jobs:
       - name: Rebuild clean dataset
         run: python clean_dataset.py
 
+      - name: Retrain the rent-estimate model (self-gating)
+        run: python price_model.py
+
       - name: Sanity guard — no landlord may lose >50% of rows
         run: |
           python - <<'PY'
@@ -76,7 +81,7 @@ jobs:
         run: |
           git config user.name "spacerank-refresh-bot"
           git config user.email "actions@github.com"
-          git add spaces_clean.csv dataset_meta.json pluto_cache.json geocode_cache.json *_listings.csv building_coords.json
+          git add spaces_clean.csv dataset_meta.json pluto_cache.json geocode_cache.json price_model.json *_listings.csv building_coords.json
           if git diff --cached --quiet; then
             echo "No data changes this week."
           else
