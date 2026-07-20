@@ -16,7 +16,9 @@
           "embeddings.npz",
           "models/**",
           "building_images.json",
-          "dataset_meta.json"
+          "dataset_meta.json",
+          "price_model.py",
+          "price_model.json"
         ]
       }
     }

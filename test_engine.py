@@ -271,6 +271,54 @@ def test_count_endpoint_matches_engine():
     assert api == eng
 
 
+# --------------------------------------------------------------------------
+# v0.11: the rent-estimate model — honest by construction
+# --------------------------------------------------------------------------
+
+def test_estimates_never_touch_ranking_or_count():
+    """RULE 1: with and without the model, scores + counts are identical."""
+    import matching, price_model
+    from matching import count_spaces
+    req = TenantRequest(property_type="Office", areas=["penn district & garment"],
+                        budget_max_psf=60, description="bright office")
+    saved = matching._PRICE_MODEL
+    try:
+        matching._PRICE_MODEL = None
+        res_off = rank_spaces(req, top_n=50)
+        cnt_off = count_spaces(req)
+        matching._PRICE_MODEL = price_model.load()
+        res_on = rank_spaces(req, top_n=50)
+        cnt_on = count_spaces(req)
+    finally:
+        matching._PRICE_MODEL = saved
+    assert [r["score"] for r in res_on] == [r["score"] for r in res_off]
+    assert [(r["landlord"], r["building"], r["suite"]) for r in res_on] ==            [(r["landlord"], r["building"], r["suite"]) for r in res_off]
+    assert cnt_on == cnt_off
+
+
+def test_estimates_only_on_unknown_rents_and_sane():
+    res = rank_spaces(TenantRequest(property_type="Office"), top_n=10**9)
+    for r in res:
+        if r["rent_psf"] is not None:
+            assert r["rent_estimate"] is None      # never second-guess a real price
+        if r["rent_estimate"]:
+            e = r["rent_estimate"]
+            assert 5 <= e["low"] <= e["psf"] <= e["high"] <= 400
+            assert "Est." in e["label"]
+
+
+def test_model_self_gates_on_tiny_data(tmp_path=None):
+    """RULE 4: a training set below the floor refuses to ship."""
+    import pandas as pd, price_model, tempfile, os
+    df = pd.read_csv("spaces_clean.csv").head(40).copy()
+    df["rent_psf"] = float("nan")
+    df.loc[df.index[:5], "rent_psf"] = 50.0        # only 5 known rents
+    p = os.path.join(tempfile.gettempdir(), "tiny.csv")
+    df.to_csv(p, index=False)
+    m = price_model.train(p)
+    assert m["ok"] is False and "usable published rents" in m["reason"]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

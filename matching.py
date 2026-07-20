@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
+import price_model as _pm
 import semantic
 
 WEIGHTS = {"type": 0.20, "size": 0.20, "budget": 0.15, "geo": 0.25, "semantic": 0.20}
@@ -316,6 +317,9 @@ def count_spaces(req: TenantRequest, csv_path: str | None = None):
     return {"count": n, "total": total, "per_landlord": per_landlord}
 
 
+_PRICE_MODEL = _pm.load()      # None unless a trained, self-approved model exists
+
+
 def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None):
     csv_path = csv_path or os.path.join(_HERE, "spaces_clean.csv")
     df = pd.read_csv(csv_path)
@@ -371,6 +375,14 @@ def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None)
                       f"description match {sem:.2f}{style_note}",
             "signals": {"type": s_type, "size": s_size, "budget": s_budg,
                         "geo": s_geo, "semantic": round(sem, 3)},
+            # RULE 1 (price_model.py): estimates are informational only.
+            # They exist ONLY for display on unknown-rent spaces — scoring
+            # and counting above never see them (test-enforced).
+            "rent_estimate": (_pm.estimate(_PRICE_MODEL, {
+                "space_type": row["space_type"], "size_sqft": row["size_sqft"],
+                "lat": row["lat"], "lng": row["lng"],
+                "year_built": row.get("year_built"), "floors": row.get("floors"),
+            }) if _n(row.get("rent_psf")) is None else None),
         })
 
     results.sort(key=lambda r: r["score"], reverse=True)

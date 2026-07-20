@@ -25,6 +25,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
+import price_model as _pm
 import semantic
 from landlord import rank_landlords
 from matching import (AREA_GROUPS, AREA_LABELS, AREAS, STYLE_LABELS,
@@ -80,7 +81,10 @@ def areas():
                        for g, ks in AREA_GROUPS.items()},
             "styles": [{"key": k, "label": v} for k, v in STYLE_LABELS.items()],
             "semantic_backend": semantic.BACKEND,
-            "dataset": dataset_meta()}
+            "dataset": dataset_meta(),
+            "price_model": ({"n_train": _m["n_train"], "loo_mae": _m["loo_mae"],
+                             "mean_rent": _m["mean_rent"], "trained_at": _m["trained_at"]}
+                            if (_m := _pm.load()) else None)}
 
 
 @app.get("/api/count")

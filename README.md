@@ -209,6 +209,45 @@ The saturation `n/(n+10)` gives diminishing returns instead of an arbitrary cap.
 - The weekly refresh workflow now runs every `scrape_*.py` it finds — adding
   landlord #7 is: write one scraper, commit, done.
 
+## v0.11 — the rent-estimate model (interview deep-dive)
+
+Most NYC landlords publish "Upon request" instead of a rent (92% of this
+dataset). `price_model.py` estimates those rents under four hard rules:
+
+1. **Estimates never touch the ranking.** Scoring keeps treating unknown
+   rent as neutral; the live count ignores estimates entirely. A test runs
+   the engine with the model disabled and asserts identical scores, order,
+   and counts.
+2. **The model only speaks where it has seen data.** Every prediction must
+   fall inside the *training envelope* — the per-feature range of the
+   training set (±10%). A model trained on value/loft buildings is not
+   allowed to price the Empire State Building.
+3. **Every estimate is a range, not a number.** The band is the 10th–90th
+   percentile of real leave-one-out residuals — as wide as the model is
+   actually wrong, not a decorative ±10%.
+4. **It refuses to ship when the data can't support it**: fewer than 25
+   usable rents, or LOO MAE above 30% of the mean rent, and
+   `price_model.json` marks itself not-ok — the API and UI then simply
+   show nothing.
+
+**The model**: ridge regression, closed form `w = (XᵀX + λI)⁻¹ Xᵀy`, numpy
+only. With ~30 training rows anything fancier memorizes noise; ridge's λ
+(chosen by leave-one-out grid search — the right CV at this n, since k-fold
+would waste rows) shrinks coefficients exactly as a tiny sample requires.
+Features are building fundamentals only — log(size), building age, floors,
+distance to two anchor centroids (Plaza district, Union Square) — and the
+landlord's identity is deliberately excluded: it would leak "this landlord
+prices low" instead of learning *why*. Near-constant features are dropped
+automatically before standardization to keep XᵀX well-conditioned.
+
+**The pipeline**: the weekly refresh retrains after every scrape and
+commits `price_model.json` (coefficients, scaler, envelope, residual band,
+metrics). Serving is one dot product per space. As more landlords publish
+rents, the training set grows and the envelope — the model's honest
+jurisdiction — widens by itself. The UI marks every estimate with `≈`, an
+amber chip, and a tooltip stating the training size and typical error;
+the footer reports the model card.
+
 ## Roadmap position
 
 Done: PLUTO backbone → GFP scraper → clean dataset → matching v1 (structured +

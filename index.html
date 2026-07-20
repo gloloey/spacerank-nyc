@@ -288,6 +288,8 @@ button { font-family:inherit; }
 @keyframes pop2 { 50% { transform:scale(1.3); } }
 
 .schip { font-size:.68rem; font-weight:700; padding:1.5px 8px; border-radius:999px; font-variant-numeric:tabular-nums; }
+.estchip { font-size:.72rem; font-weight:600; color:var(--amber); background:var(--amber-soft);
+  padding:1.5px 8px; border-radius:999px; cursor:help; white-space:nowrap; }
 .copybtn { border:1px solid var(--line); background:var(--card); color:var(--ink-faint); width:26px; height:26px;
   border-radius:7px; cursor:pointer; font-size:.72rem; flex:none; transition:all .13s; }
 .copybtn:hover { color:var(--blue); border-color:var(--blue); }
@@ -528,6 +530,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
   <span>Data scraped politely from owner-operator websites (GFP Real Estate, Rudin Management, SL Green) —
     ownership-side leasing contacts only, never brokers. Missing data is scored neutrally, never faked.</span>
   <span id="backendfoot"></span>
+  <span id="pricefoot"></span>
 </div></footer>
 <script>
 /* =====================================================================
@@ -751,6 +754,9 @@ fetch("/api/areas").then(r => r.json()).then(d => {
   }
   $("backend").textContent = `(backend: ${d.semantic_backend.split(",")[0]})`;
   $("backendfoot").textContent = `Text matching backend: ${d.semantic_backend}.`;
+  if (d.price_model) $("pricefoot").textContent =
+    `Rent estimates (marked ≈): ridge regression over building fundamentals, trained on the ${d.price_model.n_train} published rents (leave-one-out MAE $${d.price_model.loo_mae}/SF), shown only inside the model's training envelope — never quoted prices, never used in ranking.`;
+  PRICE_MODEL_META = d.price_model || null;
   const ds = d.dataset || {};
   if (ds.refreshed_at) {
     const when = new Date(ds.refreshed_at).toLocaleDateString(undefined, { year:"numeric", month:"short", day:"numeric" });
@@ -984,9 +990,15 @@ function signalBars(sig, top) {
   return `<div class="bars">` + cells.join("") + `</div>`;
 }
 function scoreCol(s) { return s >= 75 ? "var(--teal)" : s >= 55 ? "var(--blue)" : "var(--amber)"; }
+let PRICE_MODEL_META = null;
 function suiteRow(s) {
   const col = scoreCol(s.score);
-  const rent = s.rent_psf ? `<b style="color:var(--ink)">${esc(s.rent)}</b>` : (esc(s.rent) || "rent on request");
+  let rent;
+  if (s.rent_psf) rent = `<b style="color:var(--ink)">${esc(s.rent)}</b>`;
+  else if (s.rent_estimate) {
+    const m = PRICE_MODEL_META;
+    rent = `<span class="estchip" data-tt="A MODEL ESTIMATE, not a quoted price — the landlord publishes no rent here. Predicted from building fundamentals (size, age, floors, location) by a small ridge-regression model trained on the ${m ? m.n_train : "few"} rents that ARE published (typical error ±$${m ? m.loo_mae.toFixed(0) : "?"}/SF, honest range shown). It never affects the ranking.">≈ ${esc(s.rent_estimate.label)}</span>`;
+  } else rent = esc(s.rent) || "rent on request";
   return `<div class="suiterow"><span class="sname">${esc(s.suite) || "Space"}</span>
     <span class="sinfo">${fmt(s.size_sqft)} sf · ${rent}
     <span class="schip" style="background:color-mix(in srgb, ${col} 14%, transparent); color:${col}">${s.score}</span></span></div>`;
