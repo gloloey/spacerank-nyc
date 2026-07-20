@@ -186,6 +186,29 @@ The saturation `n/(n+10)` gives diminishing returns instead of an arbitrary cap.
   constant to switch the whole map to Google Maps with its transit layer;
   score-colored numbered pins and popups work identically in both modes.
 
+## v0.10 — six landlords, full geocoding, shareable searches
+
+- **Landlords #4-6**: `scrape_vornado.py` (vno.com — server-rendered property
+  pages with embedded map coordinates; office + street-retail portfolios,
+  filtered to NYC by coordinate bounding box; @vno.com leasing contacts),
+  `scrape_durst.py` (durst.org — one /availabilities page, per-building
+  tables whose COMMENTS column gives real per-suite descriptions; addresses
+  from property pages), `scrape_esrt.py` (esrtreit.com — WordPress
+  availability cards with SF/address/suite/condition; the wp-json API is
+  auth-locked so the rendered page is the source of truth). Styles:
+  Vornado + ESRT institutional (public REITs), Durst family-run.
+  Dataset: **618 available spaces / 116 buildings / 6 landlords**.
+- **Geocoding**: buildings PLUTO can't match are geocoded via the free NYC
+  GeoSearch API — live on CI runners, from the committed
+  `geocode_cache.json` elsewhere. Coordinate coverage is now 100%, so area
+  filters see the whole inventory.
+- **Shareable searches**: the whole search lives in the URL
+  (`?type=&areas=&smin=&budget=&q=…`) — bookmark it, send it, hit
+  back/forward; a "Share search" button copies the link. Opening a link
+  restores every filter and searches automatically.
+- The weekly refresh workflow now runs every `scrape_*.py` it finds — adding
+  landlord #7 is: write one scraper, commit, done.
+
 ## Roadmap position
 
 Done: PLUTO backbone → GFP scraper → clean dataset → matching v1 (structured +
