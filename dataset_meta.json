@@ -1,18 +1,25 @@
 {
- "refreshed_at": "2026-07-13T23:00:42Z",
- "total_rows": 441,
- "available_spaces": 388,
- "buildings": 102,
- "buildings_with_availability": 71,
+ "refreshed_at": "2026-07-20T08:59:50Z",
+ "total_rows": 708,
+ "available_spaces": 618,
+ "buildings": 167,
+ "buildings_with_availability": 116,
  "landlords": [
+  "Empire State Realty Trust",
   "GFP Real Estate",
   "Rudin Management",
-  "SL Green"
+  "SL Green",
+  "The Durst Organization",
+  "Vornado Realty Trust"
  ],
  "per_landlord": {
+  "Empire State Realty Trust": {
+   "rows": 33,
+   "available": 33
+  },
   "GFP Real Estate": {
-   "rows": 151,
-   "available": 120
+   "rows": 147,
+   "available": 116
   },
   "Rudin Management": {
    "rows": 65,
@@ -21,6 +28,14 @@
   "SL Green": {
    "rows": 225,
    "available": 203
+  },
+  "The Durst Organization": {
+   "rows": 71,
+   "available": 71
+  },
+  "Vornado Realty Trust": {
+   "rows": 167,
+   "available": 130
   }
  },
  "pluto_source": "pluto_cache.json (snapshot \u2014 full PLUTO not on this machine)"
