@@ -38,6 +38,7 @@ html.dark {
 }
 /* ============================== BASE ==================================== */
 * { box-sizing:border-box; }
+[hidden] { display:none !important; }
 html { scroll-behavior:smooth; }
 body {
   margin:0; font-family:var(--body); color:var(--ink);
@@ -657,23 +658,30 @@ function params(withRankInputs = true) {
   return p;
 }
 
-let countTimer = null, countCtrl = null, marketTotal = null;
+let countTimer = null, countCtrl = null, countSeq = 0;
 function refreshCount() {
   clearTimeout(countTimer);
   countTimer = setTimeout(async () => {
+    const seq = ++countSeq;
     try {
       if (countCtrl) countCtrl.abort();
       countCtrl = new AbortController();
       const r = await fetch("/api/count?" + params(false), { signal: countCtrl.signal });
-      if (!r.ok) return;
+      if (!r.ok || seq !== countSeq) return;   // stale response — a newer one is coming
       const d = await r.json();
-      marketTotal = d.total;
+      if (seq !== countSeq) return;
       animateCount($("livecnt"), d.count);
-      $("gocnt").textContent = `· ${d.count} space${d.count === 1 ? "" : "s"}`;
       $("livepct").textContent = d.total ? `${Math.round(100 * d.count / d.total)}% of market` : "";
       $("livebar").style.width = d.total ? `${Math.max(2, 100 * d.count / d.total)}%` : "100%";
-      $("livelbl").textContent = d.count === d.total ? "spaces available right now" : "spaces fit your filters";
-      $("go").classList.toggle("nores", d.count === 0);
+      if (d.count === 0) {
+        /* honest zero: nothing passes the HARD filters, but ranking is soft —
+           make the button promise the right thing instead of a scary 0 */
+        $("gocnt").textContent = "· rank closest matches";
+        $("livelbl").textContent = "exact fits — we'll rank the closest matches instead";
+      } else {
+        $("gocnt").textContent = `· ${d.count} space${d.count === 1 ? "" : "s"}`;
+        $("livelbl").textContent = d.count === d.total ? "spaces available right now" : "spaces fit your filters";
+      }
     } catch (e) { /* aborted or offline — keep the old number */ }
   }, 280);
 }
