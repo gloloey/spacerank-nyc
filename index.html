@@ -224,7 +224,7 @@ button { font-family:inherit; }
 .bname { font-family:var(--disp); font-weight:700; font-size:1.02rem; letter-spacing:-.01em; line-height:1.25; }
 .bmeta { display:flex; flex-wrap:wrap; gap:6px; margin:7px 0 9px; }
 .mchip { font-size:.7rem; color:var(--ink-soft); background:var(--card2); border:1px solid var(--line2); padding:2.5px 9px; border-radius:999px; }
-.mchip.ll { display:inline-flex; align-items:center; gap:5px; background:var(--ink); color:#fff; border-color:var(--ink); font-weight:600; }
+.mchip.ll { display:inline-flex; align-items:center; gap:5px; background:#0d1729; color:#fff; border-color:#0d1729; font-weight:600; }
 .mchip.ll img { height:11px; display:block; } .mchip.ll .m { font-weight:800; font-size:.62rem; }
 
 /* score ring */
@@ -235,12 +235,32 @@ button { font-family:inherit; }
 .ring .txt b { font-size:.98rem; font-variant-numeric:tabular-nums; letter-spacing:-.02em; line-height:1; }
 .ring .txt span { font-size:.55rem; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
 
+/* generic hover tooltips (work on any element with data-tt) */
+[data-tt] { position:relative; cursor:help; }
+[data-tt]:hover::after {
+  content:attr(data-tt); position:absolute; bottom:calc(100% + 8px); left:50%;
+  transform:translateX(-50%); width:225px; background:var(--ink); color:var(--bg);
+  font-size:.72rem; font-weight:500; padding:8px 11px; border-radius:9px; line-height:1.45;
+  box-shadow:var(--shadow-2); z-index:120; text-transform:none; letter-spacing:0; white-space:normal; text-align:left;
+}
+[data-tt]:hover::before {
+  content:""; position:absolute; bottom:calc(100% + 2px); left:50%; transform:translateX(-50%);
+  border:6px solid transparent; border-top-color:var(--ink); z-index:120;
+}
+.info { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px;
+  border-radius:50%; border:1px solid var(--line); color:var(--ink-faint); font-size:.6rem;
+  font-weight:700; margin-left:5px; font-style:normal; flex:none; }
+
 /* signal bars */
-.bars { display:grid; grid-template-columns:repeat(5,1fr); gap:7px; max-width:420px; }
+.bars { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; max-width:460px; }
+.bar .btop { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:3px; }
+.bar .btop span { font-size:.62rem; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.04em; }
+.bar .btop em { font-style:normal; font-size:.66rem; font-weight:700; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
 .bar i { display:block; height:4.5px; background:var(--line2); border-radius:99px; overflow:hidden; }
 .bar b { display:block; height:100%; width:var(--w); background:var(--blue); border-radius:99px; transform-origin:left; animation:grow .8s cubic-bezier(.2,.8,.2,1); }
 @keyframes grow { from { transform:scaleX(0); } }
-.bar span { font-size:.62rem; color:var(--ink-faint); display:block; margin-top:3px; text-transform:uppercase; letter-spacing:.04em; }
+.bar.na .btop em { color:var(--ink-faint); font-weight:500; }
+.bar.na i { background:repeating-linear-gradient(90deg, var(--line2) 0 5px, transparent 5px 9px); }
 
 /* suites & why & actions */
 .suites { border-top:1px solid var(--line2); padding:8px 18px; }
@@ -261,6 +281,19 @@ button { font-family:inherit; }
 .fav.on { background:var(--danger-soft); border-color:var(--danger); color:var(--danger); animation:pop2 .3s; }
 @keyframes pop2 { 50% { transform:scale(1.3); } }
 
+.schip { font-size:.68rem; font-weight:700; padding:1.5px 8px; border-radius:999px; font-variant-numeric:tabular-nums; }
+.copybtn { border:1px solid var(--line); background:var(--card); color:var(--ink-faint); width:26px; height:26px;
+  border-radius:7px; cursor:pointer; font-size:.72rem; flex:none; transition:all .13s; }
+.copybtn:hover { color:var(--blue); border-color:var(--blue); }
+.lltop { border-top:1px solid var(--line2); padding-top:10px; margin-bottom:11px; }
+.lltop .tl { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); margin-bottom:5px; display:flex; align-items:center; }
+.lltoprow { display:flex; justify-content:space-between; gap:8px; font-size:.76rem; padding:2.5px 0; color:var(--ink-soft); }
+.lltoprow b { color:var(--ink); font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lltoprow em { font-style:normal; font-variant-numeric:tabular-nums; flex:none; }
+.topbtn { position:fixed; right:20px; bottom:20px; z-index:150; width:42px; height:42px; border-radius:50%;
+  border:1px solid var(--line); background:var(--card); color:var(--ink); font-size:1rem; cursor:pointer;
+  box-shadow:var(--shadow-2); opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; transform:translateY(8px); }
+.topbtn.show { opacity:1; pointer-events:auto; transform:none; }
 .showmore { display:none; width:100%; border:1.5px dashed var(--line); background:transparent; color:var(--blue); font-weight:700; font-size:.86rem; border-radius:var(--r); padding:13px; cursor:pointer; margin:4px 0 26px; transition:all .15s; }
 .showmore:hover { border-color:var(--blue); background:var(--blue-soft); }
 /* ============================== LANDLORDS =============================== */
@@ -480,6 +513,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
   </div>
 </div>
 
+<button class="topbtn" id="topbtn" data-tt="Back to top" aria-label="Back to top">↑</button>
 <div class="toasts" id="toasts"></div>
 
 <footer class="foot"><div class="wrap">
@@ -728,6 +762,10 @@ document.addEventListener("keydown", e => {
   }
 });
 
+/* ---------------- back to top ------------------------------------------ */
+addEventListener("scroll", () => $("topbtn").classList.toggle("show", scrollY > 700), { passive: true });
+$("topbtn").addEventListener("click", () => scrollTo({ top: 0, behavior: "smooth" }));
+
 /* ---------------- toasts ----------------------------------------------- */
 function toast(msg) {
   const t = document.createElement("div");
@@ -851,20 +889,52 @@ $("f").addEventListener("submit", e => { e.preventDefault(); doSearch(); });
 function ring(score) {
   const R = 26, C = 2 * Math.PI * R, off = C * (1 - score / 100);
   const col = score >= 75 ? "var(--teal)" : score >= 55 ? "var(--blue)" : "var(--amber)";
-  return `<div class="ring"><svg width="62" height="62">
+  return `<div class="ring" data-tt="The overall 0-100 match: 20% type + 20% size + 15% budget + 25% area + 20% vibe. Filters you left empty are scored neutrally for every listing, so they never shift the ranking."><svg width="62" height="62">
     <circle class="trk" cx="31" cy="31" r="${R}" fill="none" stroke-width="5.5"></circle>
     <circle class="val" cx="31" cy="31" r="${R}" fill="none" stroke="${col}" stroke-width="5.5"
       stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"></circle></svg>
     <span class="txt"><b>${score}</b><span>match</span></span></div>`;
 }
-function signalBars(sig) {
-  const order = [["type","type"],["size","size"],["budget","budget"],["geo","area"],["semantic","vibe"]];
-  return `<div class="bars">` + order.map(([k, lbl]) =>
-    `<div class="bar"><i><b style="--w:${Math.round(100 * sig[k])}%"></b></i><span>${lbl}</span></div>`).join("") + `</div>`;
+/* Signal bars — HONEST version. A criterion the tenant didn't use, or data
+   the landlord never published, shows a dashed "—" with an explanation on
+   hover, never a fake-looking 50% bar. (Internally the engine scores those
+   as neutral 0.5 so missing data can't punish or reward — the tooltip says
+   exactly that.) */
+function signalBars(sig, top) {
+  const used = {
+    size:  !!($("smin").value || $("smax").value),
+    budget:!!$("budget").value,
+    geo:   selectedAreas.size > 0,
+    vibe:  !!$("q").value.trim(),
+  };
+  const rentKnown = top.rent_psf !== null && top.rent_psf !== undefined && top.rent_psf === top.rent_psf;
+  const geoKnown = top.lat !== null && top.lat !== undefined;
+  const cells = [];
+  const cell = (lbl, pct, tt, naNote) => cells.push(naNote
+    ? `<div class="bar na" data-tt="${esc(tt)}"><div class="btop"><span>${lbl}</span><em>${naNote}</em></div><i></i></div>`
+    : `<div class="bar" data-tt="${esc(tt)}"><div class="btop"><span>${lbl}</span><em>${pct}%</em></div><i><b style="--w:${pct}%"></b></i></div>`);
+
+  cell("type", Math.round(100 * sig.type),
+       "Is this the kind of space you asked for? An exact match scores 100%; related uses (like Retail for a Showroom) score lower, never zero.");
+  if (!used.size) cell("size", 0, "You didn't give a size range, so size isn't scored for anyone — it can neither help nor hurt this listing.", "—");
+  else cell("size", Math.round(100 * sig.size), "100% = inside your square-footage range; drops off the further outside it is.");
+  if (!used.budget) cell("budget", 0, "You didn't set a budget, so price isn't scored for anyone.", "—");
+  else if (!rentKnown) cell("budget", 0, "This landlord doesn't publish the rent ('upon request'). We refuse to guess — unknown price is scored neutrally so it can't punish or reward this listing. Ask via Request intro.", "n/a");
+  else cell("budget", Math.round(100 * sig.budget), "100% = the published rent is within your budget; drops off with the % over.");
+  if (!used.geo) cell("area", 0, "You didn't pick any areas, so location isn't scored — all of NYC is fair game.", "—");
+  else if (!geoKnown) cell("area", 0, "We couldn't verify this building's exact coordinates, so distance is scored neutrally rather than invented.", "n/a");
+  else cell("area", Math.round(100 * sig.geo), "How close the building is to the nearest of your chosen areas. 100% = within half a kilometer.");
+  if (!used.vibe) cell("vibe", 0, "You didn't describe what you're looking for, so description-matching isn't scored. Try the suggestion chips!", "—");
+  else cell("vibe", Math.round(100 * sig.semantic), "How similar the building's own description is to your words — matched by meaning (embeddings), not just keywords. 'Sunlit' finds 'excellent natural light'.");
+  return `<div class="bars">` + cells.join("") + `</div>`;
 }
+function scoreCol(s) { return s >= 75 ? "var(--teal)" : s >= 55 ? "var(--blue)" : "var(--amber)"; }
 function suiteRow(s) {
+  const col = scoreCol(s.score);
+  const rent = s.rent_psf ? `<b style="color:var(--ink)">${esc(s.rent)}</b>` : (esc(s.rent) || "rent on request");
   return `<div class="suiterow"><span class="sname">${esc(s.suite) || "Space"}</span>
-    <span class="sinfo">${fmt(s.size_sqft)} sf · ${esc(s.rent) || "rent on request"} · ${s.score}</span></div>`;
+    <span class="sinfo">${fmt(s.size_sqft)} sf · ${rent}
+    <span class="schip" style="background:color-mix(in srgb, ${col} 14%, transparent); color:${col}">${s.score}</span></span></div>`;
 }
 function mailtoHref(email, g) {
   const term = $("term").value;
@@ -900,7 +970,7 @@ function groupCard(g, i) {
           <span class="mchip">${g.spaces.length} matching space${g.spaces.length > 1 ? "s" : ""}</span>
           ${top.year_built ? `<span class="mchip">built ${top.year_built}</span>` : ""}
           <span class="mchip">${esc(top.borough)}</span></div>
-        ${signalBars(top.signals)}
+        ${signalBars(top.signals, top)}
       </div>
       ${ring(top.score)}
     </div>
@@ -909,6 +979,7 @@ function groupCard(g, i) {
     <div class="why"><b>Why it's here:</b> ${esc(top.reason)}</div>
     <div class="bact">
       <span class="who">${who}</span>
+      ${mail ? `<button class="copybtn" data-tt="Copy email address" onclick="copyEmail('${mail[1]}')">⧉</button>` : ""}
       <button class="fav ${favs[k] ? "on" : ""}" data-favkey="${esc(k)}" title="Save" onclick="toggleFav(${i})">♥</button>
       <a class="abtn" href="${top.url}" target="_blank" rel="noopener">Listing ↗</a>
       <button class="abtn primary" onclick="openLead('g', ${i})">Request intro</button>
@@ -926,27 +997,44 @@ function renderMore() {
 $("showmore").addEventListener("click", renderMore);
 
 /* ---------------- landlord cards --------------------------------------- */
+const LL_TT = {
+  count: "A plain count — no formula, no weighting. How many of this landlord's currently available spaces pass ALL your hard filters: right type, inside your size range, not over your known budget, near your chosen areas. Unpublished rents pass (unknown ≠ too expensive); unverified addresses fail (we never claim a location we can't check).",
+  spec: "Of everything this landlord has available, what share is exactly your area + space type? A raw percentage would let a tiny landlord's 3-of-3 beat a giant's 100-of-208, so the share is damped by the absolute count: (their matching ÷ their total) × (matching ÷ (matching + 5)). Higher = more of a specialist in what you need.",
+  quality: "How good their best options are for YOU: the average of their 3 best-fitting spaces, blending size fit, budget fit, distance to your areas, and how well building descriptions match your words (by meaning, not keywords). If zero spaces pass your filters this shows — instead of a made-up number.",
+};
 function llcard(r, i) {
   const mail = r.contact.match(/<(.+)>/);
   const who = mail
     ? `${esc(r.contact.split("<")[0].trim())} — <a href="mailto:${mail[1]}">${mail[1]}</a>`
     : esc(r.contact || "via landlord site");
+  const copy = mail ? `<button class="copybtn" data-tt="Copy email address" onclick="copyEmail('${mail[1]}')">⧉</button>` : "";
   const spec = r.specialization, str = r.match_strength;
   const specPct = Math.round(100 * spec.score);
   const strPct = str.score === null ? null : Math.round(100 * str.score);
   const strReason = esc(str.reason).replace(/“([^”]+)”/g, "<mark>“$1”</mark>");
+  const info = tt => `<span class="info" data-tt="${esc(tt)}">i</span>`;
+  const tops = (r.top_spaces || []).slice(0, 3);
+  const topList = tops.length ? `<div class="lltop">
+      <div class="tl">Their best fits for you ${info("The landlord's highest-scoring individual spaces for your exact search — same 0-100 score as the listing cards on the left.")}</div>
+      ${tops.map(t => `<div class="lltoprow"><b>${esc(t.building)}</b><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.suite)}</span><em class="schip" style="background:color-mix(in srgb, ${scoreCol(t.score)} 14%, transparent); color:${scoreCol(t.score)}">${t.score}</em></div>`).join("")}
+    </div>` : "";
   return `<div class="llcard">
     <div class="llhead">${llchip(r.landlord)}
-      ${r.style_label ? `<span class="lltag ${r.style_match ? "match" : ""}">${esc(r.style_label)}${r.style_match ? " ✓" : ""}</span>` : ""}
-      <span class="lltag">${esc(r.contact_tag)}</span></div>
-    <div class="llstat"><b>${r.match_number}</b><span>spaces that fit you<br>of ${r.n_available} available</span></div>
-    <div class="llsig"><div class="top"><span>Area &amp; type expertise</span><span>${specPct}%</span></div>
+      ${r.style_label ? `<span class="lltag ${r.style_match ? "match" : ""}" ${r.style_match ? `data-tt="Matches your landlord-type preference. This is a small tiebreaker in the ordering — never a ranking driver."` : ""}>${esc(r.style_label)}${r.style_match ? " ✓" : ""}</span>` : ""}
+      <span class="lltag" data-tt="${r.contact_tag.startsWith("Ownership") ? "A named person AT the landlord company — you'd be emailing the owner's own leasing team, not a broker." : "This landlord publishes no direct emails; inquiries go through the form on their own site."}">${esc(r.contact_tag)}</span></div>
+    <div class="llstat"><b>${r.match_number}</b><span>spaces that fit you ${info(LL_TT.count)}<br>of ${r.n_available} available</span></div>
+    <div class="llsig"><div class="top"><span>Area &amp; type expertise ${info(LL_TT.spec)}</span><span>${specPct}%</span></div>
       <i class="track"><b style="--w:${specPct}%"></b></i><div class="rsn">${esc(spec.reason)}</div></div>
-    <div class="llsig"><div class="top"><span>Spaces match quality</span><span>${strPct === null ? "—" : strPct + "%"}</span></div>
+    <div class="llsig"><div class="top"><span>Spaces match quality ${info(LL_TT.quality)}</span><span>${strPct === null ? "—" : strPct + "%"}</span></div>
       <i class="track teal"><b style="--w:${strPct || 0}%"></b></i><div class="rsn">${strReason}</div></div>
-    <div class="llfoot"><span class="who">${who}</span>
+    ${topList}
+    <div class="llfoot"><span class="who">${who}</span>${copy}
       <button class="abtn primary" onclick="openLead('l', ${i})">Request intro</button></div>
   </div>`;
+}
+function copyEmail(e) {
+  navigator.clipboard.writeText(e).then(() => toast("Email copied: " + e))
+    .catch(() => toast("Couldn't copy — " + e));
 }
 
 /* ---------------- map: dual-mode (Google if key, else Leaflet+Carto) ---- */
