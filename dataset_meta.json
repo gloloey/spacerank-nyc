@@ -1,7 +1,7 @@
 {
- "refreshed_at": "2026-07-20T16:39:18Z",
- "total_rows": 708,
- "available_spaces": 618,
+ "refreshed_at": "2026-07-20T21:47:08Z",
+ "total_rows": 709,
+ "available_spaces": 619,
  "buildings": 167,
  "buildings_with_availability": 116,
  "landlords": [
@@ -30,8 +30,8 @@
    "available": 203
   },
   "The Durst Organization": {
-   "rows": 71,
-   "available": 71
+   "rows": 72,
+   "available": 72
   },
   "Vornado Realty Trust": {
    "rows": 167,

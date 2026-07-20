@@ -1,7 +1,7 @@
 {
  "ok": true,
  "reason": null,
- "trained_at": "2026-07-20T16:39:18Z",
+ "trained_at": "2026-07-20T21:47:09Z",
  "n_train": 29,
  "lambda": 0.01,
  "loo_mae": 2.63,
