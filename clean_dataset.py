@@ -26,6 +26,7 @@ Run:  python clean_dataset.py
 """
 
 import glob
+import time
 import os
 from datetime import datetime, timezone
 import json
@@ -165,6 +166,41 @@ def main():
         df["slug"].map(lambda s: coords.get(s, [None, None])[0]), errors="coerce"))
     df["lat"] = df["lat"].fillna(df["pluto_lat"])
     df["lng"] = df["lng"].fillna(df["pluto_lng"])
+
+    # --- NYC GeoSearch (free city geocoder, no key) ------------------------
+    # Buildings PLUTO can't match (corner lots keyed by the other frontage)
+    # get real coordinates from geocode_cache.json — a committed cache built
+    # via geosearch.planninglabs.nyc. On machines with internet (CI runners),
+    # any NEW un-geocoded building is looked up live and added to the cache;
+    # where the API is unreachable we just use the cache. An un-geocodable
+    # building still honestly fails area filters rather than being guessed.
+    try:
+        with open("geocode_cache.json", encoding="utf-8") as f:
+            geocache = json.load(f)
+    except (OSError, ValueError):
+        geocache = {}
+    still = df["lat"].isna()
+    todo = sorted(set(df.loc[still, "building_name"]) - set(geocache))
+    if todo:
+        try:
+            import requests as _rq
+            for name in todo:
+                r = _rq.get("https://geosearch.planninglabs.nyc/v2/search",
+                            params={"size": 1, "text": f"{name}, New York, NY"},
+                            timeout=8)
+                feats = r.json().get("features", [])
+                if feats:
+                    lng_, lat_ = feats[0]["geometry"]["coordinates"]
+                    geocache[name] = {"lat": lat_, "lng": lng_}
+                time.sleep(0.4)                       # politeness
+            with open("geocode_cache.json", "w", encoding="utf-8") as f:
+                json.dump(geocache, f, indent=1, sort_keys=True)
+        except Exception as e:                        # offline — cache only
+            print(f"  (GeoSearch unavailable here: {type(e).__name__} — using cache only)")
+    df["lat"] = df["lat"].fillna(df["building_name"].map(
+        lambda b: geocache.get(b, {}).get("lat")))
+    df["lng"] = df["lng"].fillna(df["building_name"].map(
+        lambda b: geocache.get(b, {}).get("lng")))
     if "neighborhood" not in df.columns:
         df["neighborhood"] = ""
     df["lat"] = df["lat"].fillna(pd.to_numeric(df["neighborhood"].map(

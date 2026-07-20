@@ -457,6 +457,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
     <div class="rtool" id="rtool" hidden>
       <span class="cline" id="countline"></span>
       <span class="sp"></span>
+      <button class="abtn" id="sharebtn" data-tt="Copy a link to this exact search — filters, areas and vibe included.">🔗 Share search</button>
       <div class="viewtog" id="viewtog">
         <button data-v="list" class="on">☰ List</button>
         <button data-v="map">◎ Map</button>
@@ -757,6 +758,15 @@ fetch("/api/areas").then(r => r.json()).then(d => {
     $("freshchip").hidden = false;
     $("freshfoot").textContent = `Listings data as of ${when} — ${ds.available_spaces} available spaces across ${ds.buildings_with_availability} buildings, refreshed weekly by an automated pipeline.`;
   }
+  const fromUrl = readUrl();
+  if (fromUrl) {
+    renderAreaPills(window.__groups);
+    $("areahint").innerHTML = selectedAreas.size
+      ? `<b>${selectedAreas.size}</b> area${selectedAreas.size > 1 ? "s" : ""} selected.`
+      : "No areas selected — searching all of NYC.";
+    doSearch();
+    $("resultsbox").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   refreshCount();
 }).catch(() => { $("backend").textContent = "Could not reach the server — refresh to retry."; });
 
@@ -825,6 +835,40 @@ $("drawerx").addEventListener("click", closeDrawer);
 $("drawerback").addEventListener("click", closeDrawer);
 function closeDrawer() { $("drawer").classList.remove("open"); $("drawerback").classList.remove("open"); }
 
+/* ---------------- shareable search URLs -------------------------------- */
+/* The whole search lives in the URL: bookmark it, send it, hit back/forward.
+   ?type=Office&areas=tribeca,soho+%26+noho&smin=2000&budget=60&q=... */
+function writeUrl() {
+  const p = new URLSearchParams();
+  if (curType !== "Office") p.set("type", curType);
+  if ($("smin").value) p.set("smin", $("smin").value);
+  if ($("smax").value) p.set("smax", $("smax").value);
+  if ($("budget").value) p.set("budget", $("budget").value);
+  if (selectedAreas.size) p.set("areas", [...selectedAreas].join(","));
+  if ($("style").value) p.set("style", $("style").value);
+  if ($("term").value) p.set("term", $("term").value);
+  if ($("q").value.trim()) p.set("q", $("q").value.trim());
+  history.replaceState(null, "", p.toString() ? "?" + p.toString() : location.pathname);
+}
+function readUrl() {
+  const p = new URLSearchParams(location.search);
+  if (![...p.keys()].some(k => ["type","smin","smax","budget","areas","style","term","q"].includes(k))) return false;
+  if (p.get("type")) { curType = p.get("type"); renderTypes(); }
+  $("smin").value = p.get("smin") || ""; $("smax").value = p.get("smax") || "";
+  $("budget").value = p.get("budget") || "";
+  selectedAreas.clear();
+  (p.get("areas") || "").split(",").filter(Boolean).forEach(k => selectedAreas.add(k));
+  $("style").value = p.get("style") || ""; $("term").value = p.get("term") || "";
+  $("q").value = p.get("q") || ""; syncChips();
+  return true;
+}
+$("sharebtn").addEventListener("click", () => {
+  writeUrl();
+  navigator.clipboard.writeText(location.href)
+    .then(() => toast("Search link copied — send it to anyone"))
+    .catch(() => toast("Couldn't copy — the URL bar has the link"));
+});
+
 /* ---------------- search ----------------------------------------------- */
 async function getJSON(url, signal) {
   const r = await fetch(url, { signal });
@@ -850,6 +894,7 @@ let allGroups = [], lastLandlords = [], shown = 0;
 const PAGE = 10;
 
 async function doSearch() {
+  writeUrl();
   $("go").disabled = true;
   $("rtool").hidden = true; $("llsec").hidden = true;
   $("spaces").innerHTML = SKELETON.repeat(3);
