@@ -1,20 +1,18 @@
 # refresh_data.yml — SpaceRank NYC: the self-updating dataset
 # ============================================================
 # Every Monday 09:00 UTC (and on demand via "Run workflow"):
-#   1. re-run all three scrapers on this runner (full internet access here —
-#      the polite rate limits in each scraper still apply)
+#   1. re-run every scraper (scrape_*.py) on this runner — full internet
+#      access here; the polite rate limits in each scraper still apply
 #   2. rebuild spaces_clean.csv + dataset_meta.json with clean_dataset.py
-#      (PLUTO enrichment comes from the committed pluto_cache.json snapshot —
-#      the 23 MB manhattan_pluto.csv backbone isn't in the repo)
-#   3. SANITY GUARD: refuse to commit if any landlord's row count collapsed
-#      below 50% of the previous run — a redesigned website should fail
-#      loudly here, not silently wipe the dataset
+#      (PLUTO enrichment from the committed pluto_cache.json snapshot;
+#      missing coordinates geocoded live via the free NYC GeoSearch API
+#      and cached in geocode_cache.json)
+#   3. SANITY GUARD: refuse to commit if any known landlord's row count
+#      collapsed below 50% of the previous run — a redesigned website
+#      should fail loudly here, not silently wipe the dataset
 #   4. commit the fresh CSVs — then explicitly dispatch embeddings.yml
 #      (GITHUB_TOKEN pushes don't fire on-push workflows) — which triggers
 #      the normal Vercel deploy.
-#
-# The freshness stamp shown in the UI footer comes from dataset_meta.json,
-# so a successful run automatically updates "Listings data as of ...".
 
 name: refresh-data
 
@@ -52,9 +50,10 @@ jobs:
 
       - name: Run scrapers (polite rate limits inside each script)
         run: |
-          python scrape_gfp.py
-          python scrape_rudin.py
-          python scrape_slgreen.py
+          for s in scrape_*.py; do
+            echo "=== $s ==="
+            python "$s"
+          done
 
       - name: Rebuild clean dataset
         run: python clean_dataset.py
@@ -77,7 +76,7 @@ jobs:
         run: |
           git config user.name "spacerank-refresh-bot"
           git config user.email "actions@github.com"
-          git add spaces_clean.csv dataset_meta.json pluto_cache.json *_listings.csv building_coords.json
+          git add spaces_clean.csv dataset_meta.json pluto_cache.json geocode_cache.json *_listings.csv building_coords.json
           if git diff --cached --quiet; then
             echo "No data changes this week."
           else
