@@ -209,9 +209,13 @@ button { font-family:inherit; }
 /* building card */
 .bcard {
   background:var(--card); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow-1);
-  margin-bottom:14px; overflow:hidden; opacity:0; transform:translateY(10px); animation:rise .45s cubic-bezier(.2,.8,.25,1) forwards;
+  margin-bottom:14px; opacity:0; transform:translateY(10px); animation:rise .45s cubic-bezier(.2,.8,.25,1) forwards;
   transition:box-shadow .2s, transform .2s;
 }
+/* overflow used to be hidden (it clipped the hover tooltips); round the
+   only child that paints into the bottom corners instead */
+.bcard > :last-child { border-radius:0 0 var(--r) var(--r); }
+.bcard .why { margin:0; }
 .bcard:hover { box-shadow:var(--shadow-2); }
 @keyframes rise { to { opacity:1; transform:none; } }
 .bmain { display:flex; gap:16px; padding:16px 18px 12px; }
@@ -247,6 +251,8 @@ button { font-family:inherit; }
   content:""; position:absolute; bottom:calc(100% + 2px); left:50%; transform:translateX(-50%);
   border:6px solid transparent; border-top-color:var(--ink); z-index:120;
 }
+.ttd[data-tt]:hover::after { bottom:auto; top:calc(100% + 8px); }
+.ttd[data-tt]:hover::before { bottom:auto; top:calc(100% + 2px); border-top-color:transparent; border-bottom-color:var(--ink); }
 .info { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px;
   border-radius:50%; border:1px solid var(--line); color:var(--ink-faint); font-size:.6rem;
   font-weight:700; margin-left:5px; font-style:normal; flex:none; }
@@ -783,6 +789,10 @@ function saveFavs() {
   $("favcnt").textContent = Object.keys(favs).length;
   renderFavs();
 }
+function removeFav(k) {
+  delete favs[k]; saveFavs(); toast("Removed from saved");
+  document.querySelectorAll(`[data-favkey="${CSS.escape(k)}"]`).forEach(b => b.classList.remove("on"));
+}
 function toggleFav(i) {
   const g = allGroups[i]; if (!g) return;
   const k = favKey(g), top = g.spaces[0];
@@ -804,7 +814,7 @@ function renderFavs() {
                 : `<div class="mono2">${monogram(f.building)}</div>`}
       <div class="fi"><b>${esc(f.building)}</b><span>${esc(f.landlord)} · scored ${f.score}</span></div>
       ${f.url ? `<a href="${f.url}" target="_blank" rel="noopener" style="font-size:.72rem">listing ↗</a>` : ""}
-      <button title="Remove" onclick='favs[${JSON.stringify(k)}] && (delete favs[${JSON.stringify(k)}], saveFavs(), toast("Removed"))'>✕</button>
+      <button title="Remove" onclick='removeFav(${JSON.stringify(k)})'>✕</button>
     </div>`;
   }).join("") : `<div class="empty" style="padding:24px"><div class="big">♡</div>Nothing saved yet.<br>Tap the heart on any building card.</div>`;
 }
@@ -889,7 +899,7 @@ $("f").addEventListener("submit", e => { e.preventDefault(); doSearch(); });
 function ring(score) {
   const R = 26, C = 2 * Math.PI * R, off = C * (1 - score / 100);
   const col = score >= 75 ? "var(--teal)" : score >= 55 ? "var(--blue)" : "var(--amber)";
-  return `<div class="ring" data-tt="The overall 0-100 match: 20% type + 20% size + 15% budget + 25% area + 20% vibe. Filters you left empty are scored neutrally for every listing, so they never shift the ranking."><svg width="62" height="62">
+  return `<div class="ring ttd" data-tt="The overall 0-100 match: 20% type + 20% size + 15% budget + 25% area + 20% vibe. Filters you left empty are scored neutrally for every listing, so they never shift the ranking."><svg width="62" height="62">
     <circle class="trk" cx="31" cy="31" r="${R}" fill="none" stroke-width="5.5"></circle>
     <circle class="val" cx="31" cy="31" r="${R}" fill="none" stroke="${col}" stroke-width="5.5"
       stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"></circle></svg>
@@ -911,8 +921,8 @@ function signalBars(sig, top) {
   const geoKnown = top.lat !== null && top.lat !== undefined;
   const cells = [];
   const cell = (lbl, pct, tt, naNote) => cells.push(naNote
-    ? `<div class="bar na" data-tt="${esc(tt)}"><div class="btop"><span>${lbl}</span><em>${naNote}</em></div><i></i></div>`
-    : `<div class="bar" data-tt="${esc(tt)}"><div class="btop"><span>${lbl}</span><em>${pct}%</em></div><i><b style="--w:${pct}%"></b></i></div>`);
+    ? `<div class="bar na ttd" data-tt="${esc(tt)}"><div class="btop"><span>${lbl}</span><em>${naNote}</em></div><i></i></div>`
+    : `<div class="bar ttd" data-tt="${esc(tt)}"><div class="btop"><span>${lbl}</span><em>${pct}%</em></div><i><b style="--w:${pct}%"></b></i></div>`);
 
   cell("type", Math.round(100 * sig.type),
        "Is this the kind of space you asked for? An exact match scores 100%; related uses (like Retail for a Showroom) score lower, never zero.");
