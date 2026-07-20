@@ -35,7 +35,7 @@ HEADERS = {"User-Agent": "SpaceRankNYC/0.10 (student project; polite scraper)"}
 FIELDS = ["landlord", "building_name", "address", "description", "space_type",
           "floor_suite", "size_sqft", "rent", "contact_role", "contact_name",
           "contact_email", "contact_phone", "source_url", "scraped_at",
-          "neighborhood", "lat", "lng"]
+          "neighborhood", "lat", "lng", "image_url"]
 
 
 def geocode(text, cache={}):
@@ -83,6 +83,12 @@ def main():
             mtxt = more_el.get_text("\n", strip=True).split("\n")
             for i in range(0, len(mtxt) - 1, 2):
                 more[mtxt[i].strip().lower()] = mtxt[i + 1].strip()
+        img_el = card.select_one("img[src]") or (card.find_parent(class_="property__availabilities") or card).select_one("img[src]")
+        image_url = ""
+        if img_el:
+            s = img_el["src"].split("?")[0]
+            image_url = s if s.startswith("http") else BASE + s
+
         link = card.select_one("a[href*='/spaces/']")
         url = link["href"].split("?")[0] if link else BASE + "/leasing/"
 
@@ -114,6 +120,7 @@ def main():
             "scraped_at": scraped_at,
             "neighborhood": "" if "NY" in city else city,
             "lat": lat if lat else "", "lng": lng if lng else "",
+            "image_url": image_url,
         })
         print(f"  {building[:34]:34s} {suite[:26]:26s} {sf:>10s} geo={'Y' if lat else 'N'}")
 

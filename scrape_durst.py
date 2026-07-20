@@ -39,7 +39,7 @@ KEEP_TYPES = {"office", "retail", "durst ready office", "broadcast"}
 FIELDS = ["landlord", "building_name", "address", "description", "space_type",
           "floor_suite", "size_sqft", "rent", "contact_role", "contact_name",
           "contact_email", "contact_phone", "source_url", "scraped_at",
-          "neighborhood", "lat", "lng"]
+          "neighborhood", "lat", "lng", "image_url"]
 
 ADDR_RE = re.compile(
     r"\d{1,4}[\w\-]* (?:East|West|North|South )?[\w\.' ]{2,30}?"
@@ -101,6 +101,11 @@ def main():
         if url.startswith("/"):
             url = BASE + url
         addr, desc = property_meta(url)
+        img_el = block.select_one("img[src]")
+        image_url = ""
+        if img_el:
+            s = img_el["src"]
+            image_url = s if s.startswith("http") else BASE + s
         # the building name is often itself the address (825 Third Avenue)
         geocode_text = addr or name
         lat, lng = geocode(geocode_text)
@@ -135,6 +140,7 @@ def main():
                 "scraped_at": scraped_at,
                 "neighborhood": "",
                 "lat": lat if lat else "", "lng": lng if lng else "",
+                "image_url": image_url,
             })
             n_spaces += 1
         print(f"  {name[:40]:40s} {n_spaces} spaces  geo={'Y' if lat else 'N'}")

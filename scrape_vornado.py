@@ -37,7 +37,7 @@ NYC = {"lat": (40.45, 41.0), "lng": (-74.3, -73.6)}
 FIELDS = ["landlord", "building_name", "address", "description", "space_type",
           "floor_suite", "size_sqft", "rent", "contact_role", "contact_name",
           "contact_email", "contact_phone", "source_url", "scraped_at",
-          "neighborhood", "lat", "lng"]
+          "neighborhood", "lat", "lng", "image_url"]
 
 
 def get(url):
@@ -82,6 +82,14 @@ def parse_property(url, kind):
     ov = soup.select_one("#overview")
     desc = re.sub(r"\s+", " ", ov.get_text(" ", strip=True))[:1500] if ov else ""
 
+    # building photo: first non-logo image on their CDN (cdn-vno.reol.com)
+    image_url = ""
+    for im in soup.select("img[src]"):
+        s = im["src"]
+        if "reol.com" in s and not re.search(r"logo|icon|\.svg", s, re.I):
+            image_url = s if s.startswith("http") else "https:" + s
+            break
+
     # first ownership-side contact (mailto @vno.com); name = text before the
     # email inside the same block
     c_name = c_email = ""
@@ -123,6 +131,7 @@ def parse_property(url, kind):
             "scraped_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "neighborhood": "",
             "lat": lat, "lng": lng,
+            "image_url": image_url,
         })
     # a building with no availabilities still contributes one portfolio row
     if not rows:
@@ -131,7 +140,7 @@ def parse_property(url, kind):
                      "address": name, "description": desc, "space_type": kind,
                      "rent": "", "source_url": url,
                      "scraped_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                     "lat": lat, "lng": lng})
+                     "lat": lat, "lng": lng, "image_url": image_url})
     return rows
 
 
