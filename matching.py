@@ -52,9 +52,12 @@ STYLE_BONUS = 3.0        # points (of 100) when the landlord matches the
 # Only styles that actually exist in the data are offered as filters.
 # ---------------------------------------------------------------------------
 LANDLORD_PROFILES = {
-    "SL Green":         "institutional",
-    "Rudin Management": "family-run",
-    "GFP Real Estate":  "family-run",
+    "SL Green":                  "institutional",   # public REIT (NYSE: SLG)
+    "Rudin Management":          "family-run",      # Rudin family since 1925
+    "GFP Real Estate":           "family-run",      # Gural family
+    "Vornado Realty Trust":      "institutional",   # public REIT (NYSE: VNO)
+    "The Durst Organization":    "family-run",      # Durst family since 1915
+    "Empire State Realty Trust": "institutional",   # public REIT (NYSE: ESRT)
 }
 STYLE_LABELS = {"institutional": "Institutional (public REIT)",
                 "family-run": "Family-run firm"}
