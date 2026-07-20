@@ -689,6 +689,8 @@ function animateCount(el, target) {
   const from = parseInt(el.textContent.replace(/\D/g, "")) || 0;
   if (from === target) { el.textContent = target; return; }
   const t0 = performance.now(), dur = 450;
+  clearTimeout(el._settle);
+  el._settle = setTimeout(() => { el.textContent = target; }, dur + 80); // rAF pauses in hidden tabs — always settle
   (function tick(t) {
     const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
     el.textContent = Math.round(from + (target - from) * e);
