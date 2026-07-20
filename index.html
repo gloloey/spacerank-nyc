@@ -949,6 +949,25 @@ function mailtoHref(email, g) {
     `\nSuites of interest: ${g.spaces.slice(0, 3).map(s => s.suite).join("; ")}\n\nThank you`);
   return `mailto:${email}?subject=${subject}&body=${body}`;
 }
+/* The engine's reason string mentions every signal — including neutral ones
+   like "no budget given; description match 0.50". For the tenant, fragments
+   about criteria they never used are noise; the dashes in the bars already
+   say it. Keep only the informative parts. */
+function cleanReason(txt) {
+  const used = { size: !!($("smin").value || $("smax").value), budget: !!$("budget").value,
+                 geo: selectedAreas.size > 0, vibe: !!$("q").value.trim() };
+  const parts = (txt || "").split(/;\s*/).filter(p => {
+    const s = p.toLowerCase();
+    if (!used.size   && /size target|no size/.test(s)) return false;
+    if (!used.budget && /budget/.test(s)) return false;
+    if (!used.vibe   && /description match/.test(s)) return false;
+    if (!used.geo    && /(km from|no area)/.test(s)) return false;
+    return p.trim() !== "";
+  });
+  const out = parts.join("; ");
+  return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
 function groupCard(g, i) {
   const top = g.spaces[0];
   const mail = top.contact.match(/<(.+)>/);
@@ -976,7 +995,7 @@ function groupCard(g, i) {
     </div>
     <div class="suites">${first.map(suiteRow).join("")}
       ${rest.length ? `<details class="moresuites"><summary>${rest.length} more space${rest.length > 1 ? "s" : ""} in this building</summary>${rest.map(suiteRow).join("")}</details>` : ""}</div>
-    <div class="why"><b>Why it's here:</b> ${esc(top.reason)}</div>
+    <div class="why"><b>Why it's here:</b> ${esc(cleanReason(top.reason))}</div>
     <div class="bact">
       <span class="who">${who}</span>
       ${mail ? `<button class="copybtn" data-tt="Copy email address" onclick="copyEmail('${mail[1]}')">⧉</button>` : ""}
