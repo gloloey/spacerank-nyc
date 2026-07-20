@@ -163,6 +163,29 @@ The saturation `n/(n+10)` gives diminishing returns instead of an arbitrary cap.
   storage (Vercel KV / Postgres) is the documented next step and needs a
   credential.
 
+## v0.8 — live count preview + the redesigned UI
+
+- **`GET /api/count`** — the number on the Search button. Applies exactly the
+  landlord layer's HARD-filter semantics (type strict; size strict when given;
+  budget rejects only known violations; area within 2 km) and touches no
+  semantic model, so it's cheap enough to call on every filter change
+  (debounced 280 ms, stale responses discarded by sequence number). Tests pin
+  two properties: adding a filter can only shrink the count, and vibe text /
+  landlord style / term never change it (they rank, they don't filter). When
+  the count is 0 the button honestly switches to "rank closest matches" —
+  ranking is soft even when the hard filters are empty.
+- **Full UI rebuild** (still one file, no framework): guided 4-step filter
+  rail with a sticky search dock, three one-click tenant personas, segmented
+  type picker, size quick-presets, tooltips on every non-obvious control,
+  score rings, animated signal bars, skeleton loaders, staggered card
+  entrances, saved-buildings drawer (device-local), dark mode (auto +
+  toggle), toasts, keyboard shortcut `/`, and List/Map view toggle.
+- **Map, dual-mode**: default is Leaflet + free Carto Voyager tiles (subway
+  stations, parks and landmarks appear as you zoom — and a dark tile set in
+  dark mode). Paste a Google Maps key into the single marked `GMAPS_KEY`
+  constant to switch the whole map to Google Maps with its transit layer;
+  score-colored numbered pins and popups work identically in both modes.
+
 ## Roadmap position
 
 Done: PLUTO backbone → GFP scraper → clean dataset → matching v1 (structured +
