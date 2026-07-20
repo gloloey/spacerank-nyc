@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field, field_validator
 import semantic
 from landlord import rank_landlords
 from matching import (AREA_GROUPS, AREA_LABELS, AREAS, STYLE_LABELS,
-                      TenantRequest, rank_spaces)
+                      TenantRequest, count_spaces, rank_spaces)
 
 app = FastAPI(title="SpaceRank NYC", version="0.7",
               description="Commercial-space matching for NYC — ranked spaces "
@@ -81,6 +81,18 @@ def areas():
             "styles": [{"key": k, "label": v} for k, v in STYLE_LABELS.items()],
             "semantic_backend": semantic.BACKEND,
             "dataset": dataset_meta()}
+
+
+@app.get("/api/count")
+def count(property_type: str = Query("Office"),
+          size_min: float | None = None, size_max: float | None = None,
+          budget: float | None = None,
+          area: list[str] = Query(default=[])):
+    """Live preview for the search button: spaces passing the HARD filters.
+    Style / term / free text are ranking inputs, never filters — by design
+    they aren't even parameters here."""
+    req = build_request(property_type, size_min, size_max, budget, area, "", None, None)
+    return count_spaces(req)
 
 
 @app.get("/api/match")

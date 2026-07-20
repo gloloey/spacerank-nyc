@@ -263,6 +263,56 @@ def _n(v):
     return None if v is None or v != v else v
 
 
+COUNT_AREA_RADIUS_KM = 2.0    # same hard-filter radius the landlord layer uses
+
+
+def count_spaces(req: TenantRequest, csv_path: str | None = None):
+    """LIVE COUNT PREVIEW for the search button: how many available spaces
+    pass the tenant's HARD filters right now, before they even search.
+
+    Deliberately mirrors landlord.passes_hard_filters (one truth, two uses):
+      type    strict (exact match only)
+      size    within range, when a range is given
+      budget  rejects only KNOWN rents above budget ("Upon request" passes)
+      area    within 2 km of ANY selected submarket; un-geocoded spaces fail
+    The free-text description, landlord style, and term are RANKING inputs,
+    not filters — they never change this number (tests enforce it).
+    Cheap by construction: no semantic model is touched.
+    """
+    csv_path = csv_path or os.path.join(_HERE, "spaces_clean.csv")
+    df = pd.read_csv(csv_path)
+    df = df[df["is_available"] & (df["building_use"] == "commercial")]
+    df = df.drop_duplicates(subset=["landlord", "building_name", "floor_suite"])
+
+    total = len(df)
+    n = 0
+    per_landlord = {}
+    for _, row in df.iterrows():
+        s_type, _ = score_type(row["space_type"], req.property_type)
+        if s_type != 1.0:
+            continue
+        if req.size_min is not None or req.size_max is not None:
+            s_size, _ = score_size(row["size_sqft"], req.size_min, req.size_max)
+            if s_size != 1.0:
+                continue
+        if req.budget_max_psf is not None:
+            rent = _n(row.get("rent_psf"))
+            if rent is not None and rent > req.budget_max_psf:
+                continue
+        if req.areas:
+            lat, lng = _n(row.get("lat")), _n(row.get("lng"))
+            if lat is None or lng is None:
+                continue
+            d, _k = nearest_area(lat, lng, req.areas)
+            if d is None or d > COUNT_AREA_RADIUS_KM:
+                continue
+        n += 1
+        ll = _s(row["landlord"])
+        per_landlord[ll] = per_landlord.get(ll, 0) + 1
+
+    return {"count": n, "total": total, "per_landlord": per_landlord}
+
+
 def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None):
     csv_path = csv_path or os.path.join(_HERE, "spaces_clean.csv")
     df = pd.read_csv(csv_path)

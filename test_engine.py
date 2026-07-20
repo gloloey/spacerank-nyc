@@ -240,6 +240,37 @@ def test_lead_bounds_hostile_search_payload():
     # (the bounding itself is a validator — 12 keys x 200 chars max)
 
 
+def test_count_preview_shrinks_monotonically():
+    """Adding a hard filter may only shrink (never grow) the live count."""
+    from matching import count_spaces
+    base = count_spaces(TenantRequest(property_type="Office"))["count"]
+    a = count_spaces(TenantRequest(property_type="Office", areas=["soho & noho"]))["count"]
+    b = count_spaces(TenantRequest(property_type="Office", areas=["soho & noho"],
+                                   size_min=2000, size_max=8000))["count"]
+    c = count_spaces(TenantRequest(property_type="Office", areas=["soho & noho"],
+                                   size_min=2000, size_max=8000, budget_max_psf=60))["count"]
+    assert base >= a >= b >= c >= 0
+    assert base > 0
+
+
+def test_count_ignores_ranking_only_inputs():
+    """Vibe text, landlord style, and term rank — they must never filter."""
+    from matching import count_spaces
+    plain = count_spaces(TenantRequest(property_type="Office", areas=["tribeca"]))
+    styled = count_spaces(TenantRequest(property_type="Office", areas=["tribeca"],
+                                        description="bright sunlit loft",
+                                        landlord_style="family-run", term="short"))
+    assert plain["count"] == styled["count"]
+
+
+def test_count_endpoint_matches_engine():
+    from matching import count_spaces
+    api = _client().get("/api/count", params={"property_type": "Office",
+                                              "area": ["soho & noho"]}).json()
+    eng = count_spaces(TenantRequest(property_type="Office", areas=["soho & noho"]))
+    assert api == eng
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
