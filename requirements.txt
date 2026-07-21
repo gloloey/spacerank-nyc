@@ -4,6 +4,7 @@ fastapi
 uvicorn
 pandas
 numpy
+requests   # GET /api/geocode proxies NYC GeoSearch live, at request time
 # query-time embedding encoder for the deployed semantic backend (~40 MB, no PyTorch):
 onnxruntime
 tokenizers
