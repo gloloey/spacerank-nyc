@@ -83,11 +83,23 @@ def main():
             mtxt = more_el.get_text("\n", strip=True).split("\n")
             for i in range(0, len(mtxt) - 1, 2):
                 more[mtxt[i].strip().lower()] = mtxt[i + 1].strip()
-        img_el = card.select_one("img[src]") or (card.find_parent(class_="property__availabilities") or card).select_one("img[src]")
+        # WordPress lazy-loads images: src is a 1x1 data: placeholder and the
+        # real file sits in data-src / data-lazy-src / srcset. Take the first
+        # real URL and never accept a data: URI.
         image_url = ""
-        if img_el:
-            s = img_el["src"].split("?")[0]
-            image_url = s if s.startswith("http") else BASE + s
+        for img_el in ([card.select_one("img")] +
+                       list((card.find_parent(class_="property__availabilities") or card).select("img"))):
+            if img_el is None:
+                continue
+            for attr in ("data-src", "data-lazy-src", "data-original", "src"):
+                s = (img_el.get(attr) or "").split("?")[0].strip()
+                if not s and attr == "src" and img_el.get("srcset"):
+                    s = img_el["srcset"].split(",")[0].split(" ")[0]
+                if s and not s.startswith("data:"):
+                    image_url = s if s.startswith("http") else BASE + s
+                    break
+            if image_url:
+                break
 
         link = card.select_one("a[href*='/spaces/']")
         url = link["href"].split("?")[0] if link else BASE + "/leasing/"

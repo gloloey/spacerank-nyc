@@ -366,7 +366,8 @@ def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None)
             "contact": (f"{_s(row['contact_name'])} <{row['contact_email']}>"
                         if _s(row["contact_email"]) else _s(row["contact_name"])),
             "url": _s(row["source_url"]),
-            "image": BUILDING_IMAGES.get(slug) or (_s(row.get("image_url")) or None),
+            "image": (lambda _i: None if not _i or _i.startswith("data:") else _i)(
+                BUILDING_IMAGES.get(slug) or _s(row.get("image_url"))),
             "lat": _n(row["lat"]),
             "lng": _n(row["lng"]),
             "year_built": None if row.get("year_built") != row.get("year_built")
