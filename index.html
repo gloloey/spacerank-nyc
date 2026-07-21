@@ -714,7 +714,7 @@ function renderAnchorDrop() {
 async function selectAnchorItem(i) {
   const it = anchorItems[i];
   if (!it) return;
-  if (it.type === "station") { setAnchor({ label: `${it.label} (${it.routes})`, lat: it.lat, lng: it.lng }); return; }
+  if (it.type === "station") { setAnchor({ label: it.label, lat: it.lat, lng: it.lng }); return; }
   $("anchorq").disabled = true;
   try {
     const r = await fetch("/api/geocode?" + new URLSearchParams({ q: it.label }));

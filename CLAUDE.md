@@ -48,14 +48,17 @@ entrypoint).
 - `.github/workflows/embeddings.yml` — re-embeds descriptions, commits
   `embeddings.npz` + `models/`, which triggers the Vercel deploy.
 - Adding a landlord = write one `scrape_<name>.py` (match the CSV schema in
-  any existing scraper, include `image_url`), add its style to
-  `LANDLORD_PROFILES` in matching.py, commit. Everything else is automatic.
+  any existing scraper, include `image_url`), add it to `LANDLORD_PROFILES`
+  in matching.py **only if** it honestly fits "institutional" (public
+  REIT) or "family-run" (family-owned/led) — RXR fits neither and is
+  intentionally left out, staying unclassified rather than forced. Commit;
+  everything else is automatic.
 
 ## Commands
 ```
 python -m pip install -r requirements.txt          # runtime deps
 python -m pip install -r requirements-dev.txt      # + scraping/test deps
-python test_engine.py            # 28 tests — MUST stay green (or: pytest)
+python test_engine.py            # 33 tests — MUST stay green (or: pytest)
 python -m uvicorn app:app --reload                 # local server :8000
 python clean_dataset.py          # rebuild dataset from *_listings.csv
 python price_model.py            # retrain rent model -> price_model.json
@@ -78,10 +81,26 @@ Windows: use `python`, not `python3`.
   in `data-src`). The engine rejects `data:` URIs as images.
 - `manhattan_pluto.csv` (23 MB) is deliberately NOT in the repo;
   `pluto_cache.json` is the committed snapshot that replaces it on machines
-  that don't have it. Same pattern for geocoding (`geocode_cache.json`).
+  that don't have it. Same pattern for geocoding (`geocode_cache.json`) and
+  subway stations (`subway_stations.json`, built once by
+  `tools/build_subway_stations.py` from NY State's open-data API — station
+  coordinates don't drift, so this isn't part of the weekly refresh).
 - Tests live in `test_engine.py` and pin DESIGN DECISIONS (neutral scores,
   term never ranked, estimates never ranked, count monotonicity). When you
   add a behavior rule, add a test that pins it.
+- **Never regex-search a whole flattened page (`soup.get_text()`) for
+  something that needs to be exact, like an address.** A scraper did this
+  and a non-greedy match silently fused two different buildings' names
+  from a site nav menu into one fake address, geocoding 6 buildings to the
+  same wrong point undetected for weeks. Prefer a structured, isolated
+  source instead — a specific `<meta>` tag, a JSON field, one DOM element
+  — where cross-item contamination is structurally impossible.
+- **Any new top-level import in `app.py`/`matching.py`/`landlord.py` needs
+  a `requirements.txt` check**, not just "it works locally" — dev-only
+  packages (`requirements-dev.txt`) are invisible locally but crash the
+  live deployment on every route via `ModuleNotFoundError`. This has
+  happened once already (`requests` for `/api/geocode`); after adding or
+  changing any import, re-check both requirement files before pushing.
 
 ## Style
 Python: stdlib + the pinned deps only; docstrings explain the WHY and the
