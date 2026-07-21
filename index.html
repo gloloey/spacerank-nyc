@@ -1166,8 +1166,8 @@ function drawMap(groups) {
       html: `<div style="background:${col};color:#fff;font-weight:700;border-radius:50%;width:30px;height:30px;
         text-align:center;line-height:30px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.4);border:2px solid #fff">${i + 1}</div>` });
     L.marker([r.lat, r.lng], { icon })
-      .bindPopup(`<b>${esc(g.building)}</b><br>${g.spaces.length} matching space(s) · top score ${r.score}<br>
-        <a href="${r.url}" target="_blank" rel="noopener">listing ↗</a>`)
+      .bindPopup(`<div style="color:#1a2233"><b>${esc(g.building)}</b><br>${g.spaces.length} matching space(s) · top score ${r.score}<br>
+        <a href="${r.url}" target="_blank" rel="noopener">listing ↗</a></div>`)
       .addTo(markerLayer);
   });
   fitMap();
@@ -1194,7 +1194,7 @@ function drawGoogleMap() {
       const r = g.spaces[0];
       const m = new google.maps.Marker({ position: { lat: r.lat, lng: r.lng }, map: gmap, label: { text: String(i + 1), color: "#fff", fontWeight: "700" } });
       m.addListener("click", () => {
-        info.setContent(`<b>${esc(g.building)}</b><br>${g.spaces.length} matching space(s) · top score ${r.score}<br><a href="${r.url}" target="_blank" rel="noopener">listing ↗</a>`);
+        info.setContent(`<div style="color:#1a2233"><b>${esc(g.building)}</b><br>${g.spaces.length} matching space(s) · top score ${r.score}<br><a href="${r.url}" target="_blank" rel="noopener">listing ↗</a></div>`);
         info.open(gmap, m);
       });
       gMarkers.push(m);
