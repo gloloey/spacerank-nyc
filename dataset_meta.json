@@ -1,18 +1,25 @@
 {
- "refreshed_at": "2026-07-21T02:44:06Z",
- "total_rows": 709,
- "available_spaces": 619,
- "buildings": 167,
- "buildings_with_availability": 116,
+ "refreshed_at": "2026-07-21T17:07:43Z",
+ "total_rows": 790,
+ "available_spaces": 682,
+ "buildings": 202,
+ "buildings_with_availability": 133,
  "landlords": [
+  "Brookfield Properties",
   "Empire State Realty Trust",
   "GFP Real Estate",
+  "RXR Realty",
   "Rudin Management",
   "SL Green",
+  "Silverstein Properties",
   "The Durst Organization",
   "Vornado Realty Trust"
  ],
  "per_landlord": {
+  "Brookfield Properties": {
+   "rows": 46,
+   "available": 28
+  },
   "Empire State Realty Trust": {
    "rows": 33,
    "available": 33
@@ -21,6 +28,10 @@
    "rows": 147,
    "available": 116
   },
+  "RXR Realty": {
+   "rows": 28,
+   "available": 28
+  },
   "Rudin Management": {
    "rows": 65,
    "available": 65
@@ -28,6 +39,10 @@
   "SL Green": {
    "rows": 225,
    "available": 203
+  },
+  "Silverstein Properties": {
+   "rows": 7,
+   "available": 7
   },
   "The Durst Organization": {
    "rows": 72,

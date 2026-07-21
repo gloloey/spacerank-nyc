@@ -59,6 +59,12 @@ LANDLORD_PROFILES = {
     "Vornado Realty Trust":      "institutional",   # public REIT (NYSE: VNO)
     "The Durst Organization":    "family-run",      # Durst family since 1915
     "Empire State Realty Trust": "institutional",   # public REIT (NYSE: ESRT)
+    "Brookfield Properties":     "institutional",   # part of Brookfield Asset Mgmt (NYSE: BN)
+    "Silverstein Properties":    "family-run",      # Silverstein family since 1957
+    # RXR Realty is intentionally NOT classified: privately held (founded/led
+    # by Scott Rechler), neither a public REIT nor a multi-generation family
+    # firm in the Rudin/Durst/GFP/Silverstein sense — landlord_style stays
+    # None rather than forcing it into either bucket.
 }
 STYLE_LABELS = {"institutional": "Institutional (public REIT)",
                 "family-run": "Family-run firm"}

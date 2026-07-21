@@ -7,11 +7,20 @@ happy path — if someone changes "unknown rent is neutral", a test fails.
 """
 
 import math
+import os
+
+import pandas as pd
 
 from landlord import rank_landlords
 from matching import (LANDLORD_PROFILES, TenantRequest, haversine_km,
                       rank_spaces, score_budget, score_geo, score_size,
                       score_type)
+
+# The real landlord roster is whatever's in the scraped dataset — NOT
+# LANDLORD_PROFILES, which only tags landlords with a KNOWN style and
+# intentionally omits ones (like RXR Realty) that don't fit either bucket.
+REAL_LANDLORDS = set(pd.read_csv(
+    os.path.join(os.path.dirname(__file__), "spaces_clean.csv"))["landlord"].unique())
 
 NAN = float("nan")
 
@@ -80,7 +89,7 @@ def test_landlord_v2_shape_and_bounds():
     # (new landlords, new coverage) — pin the invariant, not a fixed roster.
     names = [r["landlord"] for r in res]
     assert names and len(names) == len(set(names))     # no duplicates
-    assert set(names) <= set(LANDLORD_PROFILES)         # only real landlords, never invented
+    assert set(names) <= REAL_LANDLORDS                 # only real landlords, never invented
     orderings = [r["ordering"] for r in res]
     assert orderings == sorted(orderings, reverse=True)
     for r in res:
