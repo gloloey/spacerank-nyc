@@ -41,9 +41,46 @@ FIELDS = ["landlord", "building_name", "address", "description", "space_type",
           "contact_email", "contact_phone", "source_url", "scraped_at",
           "neighborhood", "lat", "lng", "image_url"]
 
-ADDR_RE = re.compile(
-    r"\d{1,4}[\w\-]* (?:East|West|North|South )?[\w\.' ]{2,30}?"
-    r"(?:Street|St\.?|Avenue|Ave\.?|Broadway|Place|Plaza|Lane|Road)", re.I)
+# BUG FIX (found 2026-07-21 while adding a "search near a subway station"
+# feature — a proximity search made an old bug visible: 6 buildings were
+# all landing on the exact same wrong coordinates). The ORIGINAL regex
+# below ran with re.search over the WHOLE page's flattened text, including
+# the site nav (a menu literally listing every Durst property name back
+# to back) and the footer (Durst's own HQ address, on every page). Because
+# its middle group `[\w\.' ]{2,30}?` allows digits AND spaces, a non-greedy
+# search could span clean across several property names in that nav menu —
+# e.g. "1155 Avenue of the Americas 1133 Avenue" is two different real
+# buildings' names fused into one bogus "address" by the regex matching
+# from the first building's house number to the SECOND building's street
+# suffix. That fake address then geocoded to a single wrong point, and
+# every building whose real address happened to be unfindable in the page
+# body fell into this same trap (they all matched the same nav-menu span).
+#
+# THE FIX: don't search the whole flattened page for an address-shaped
+# string at all — use each Durst property page's own <meta name="keywords">
+# tag, which (when page-specific, which is most of the time) lists the
+# real street address as one clean, comma-isolated entry, e.g.
+# "OWTC, One World Trade Center, ..., 285 Fulton Street, SOM, ...". Splitting
+# on commas BEFORE pattern-matching makes cross-item contamination
+# structurally impossible — each candidate is matched with re.fullmatch,
+# so a match can only ever be that one isolated phrase, never a fusion of
+# two. Falls back to the old flattened-text search (now scoped away from
+# nav/footer) only if no keyword candidate looks like an address, and
+# ultimately to the building's own name (unchanged behavior) if nothing
+# useful is found anywhere — never fabricated.
+ADDR_CANDIDATE_RE = re.compile(
+    r"^\d{1,4}[\w\-]*(?:\s+(?:East|West|North|South))?\s+[A-Za-z0-9\.' ]{2,35}?"
+    r"(?:Street|St\.?|Avenue|Ave\.?|Broadway|Place|Plaza|Square|Lane|Road)\.?$", re.I)
+ADDR_FALLBACK_RE = re.compile(
+    r"\d{1,4}[\w\-]* (?:East|West|North|South )?[A-Za-z\.' ]{2,30}?"
+    r"(?:Street|St\.?|Avenue|Ave\.?|Broadway|Place|Plaza|Square|Lane|Road)", re.I)
+# "42nd and Broadway" is a cross-streets DESCRIPTION, not a mailing address —
+# it happens to satisfy the shape above (digit ... suffix word) but geocodes
+# unreliably (a real bug found while fixing this: it landed a Times Square
+# building in the Financial District). Reject anything joined by "and".
+_CROSS_STREETS_RE = re.compile(r"\band\b", re.I)
+_BOILERPLATE_SELECTORS = ["footer", "nav", "header", "#footerWrapper", "#footer",
+                          "#header", "#mainNav", ".menu"]
 
 
 def get(url):
@@ -68,6 +105,25 @@ def geocode(text):
     return None, None
 
 
+def extract_address(soup):
+    """See the BUG FIX note above ADDR_CANDIDATE_RE. Tries the page's own
+    meta keywords first (page-specific, comma-isolated, safe from cross-
+    item contamination); falls back to a body-text search with nav/footer/
+    header removed; "" (caller falls back to the building name) if neither
+    finds anything address-shaped."""
+    kw = soup.select_one('meta[name="keywords"]')
+    if kw and kw.get("content"):
+        for item in kw["content"].split(","):
+            item = item.strip()
+            if ADDR_CANDIDATE_RE.match(item) and not _CROSS_STREETS_RE.search(item):
+                return item
+    for sel in _BOILERPLATE_SELECTORS:
+        for el in soup.select(sel):
+            el.decompose()
+    m = ADDR_FALLBACK_RE.search(soup.get_text(" ", strip=True))
+    return m.group(0).strip() if m else ""
+
+
 def property_meta(url):
     """Address + description + best-effort from a /properties page."""
     try:
@@ -75,9 +131,7 @@ def property_meta(url):
     except Exception:
         return "", ""
     soup = BeautifulSoup(html, "lxml")
-    text = soup.get_text(" ", strip=True)
-    m = ADDR_RE.search(text)
-    addr = m.group(0).strip() if m else ""
+    addr = extract_address(soup)
     desc = ""
     for p in soup.select("p"):
         t = re.sub(r"\s+", " ", p.get_text(" ", strip=True))
@@ -107,8 +161,9 @@ def main():
             s = img_el["src"]
             image_url = s if s.startswith("http") else BASE + s
         # the building name is often itself the address (825 Third Avenue)
-        geocode_text = addr or name
-        lat, lng = geocode(geocode_text)
+        lat, lng = geocode(addr) if addr else (None, None)
+        if lat is None and name != addr:
+            lat, lng = geocode(name)       # extracted address didn't geocode — try the name
         if lat and not (40.4 < lat < 41.1):
             lat = lng = None               # e.g. Philadelphia — drop coords
         n_spaces = 0

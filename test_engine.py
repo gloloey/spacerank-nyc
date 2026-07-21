@@ -13,8 +13,9 @@ import pandas as pd
 
 from landlord import rank_landlords
 from matching import (LANDLORD_PROFILES, TenantRequest, haversine_km,
-                      rank_spaces, score_budget, score_geo, score_size,
-                      score_type)
+                      nearest_geo_target, rank_spaces, score_budget,
+                      score_geo, score_size, score_type,
+                      search_subway_stations)
 
 # The real landlord roster is whatever's in the scraped dataset — NOT
 # LANDLORD_PROFILES, which only tags landlords with a KNOWN style and
@@ -166,6 +167,58 @@ def test_multi_area_uses_nearest():
             >= sum(r["match_number"] for r in a))
 
 
+# ---- geo anchor ("near a subway station / address") ------------------------
+def test_anchor_sanitizes_bogus_input():
+    """A malformed anchor (missing coords, wrong type, off the edge of the
+    world) is dropped to None instead of trusted or crashing — same
+    philosophy as budget<=0 and swapped size bounds."""
+    assert TenantRequest(property_type="Office", anchor=None).anchor is None
+    assert TenantRequest(property_type="Office", anchor={}).anchor is None
+    assert TenantRequest(property_type="Office", anchor="not a dict").anchor is None
+    assert TenantRequest(property_type="Office",
+                         anchor={"lat": "nope", "lng": -74.0, "label": "x"}).anchor is None
+    assert TenantRequest(property_type="Office",
+                         anchor={"lat": 51.5, "lng": -0.12, "label": "London"}).anchor is None  # not NYC
+    ok = TenantRequest(property_type="Office",
+                       anchor={"lat": 40.7357, "lng": -73.9906, "label": "14 St-Union Sq"}).anchor
+    assert ok == {"label": "14 St-Union Sq", "lat": 40.7357, "lng": -73.9906}
+
+
+def test_anchor_pools_with_areas_in_geo_score():
+    """An anchor point is just another candidate alongside chosen areas —
+    the closest one wins, exactly like multiple areas already do."""
+    station = {"label": "14 St-Union Sq", "lat": 40.735736, "lng": -73.990568}
+    near_anchor_only = score_geo(40.735736, -73.990568, [], station)[0]
+    assert near_anchor_only == 1.0
+    # a far-away area shouldn't drag the score down when the anchor is close
+    pooled = score_geo(40.735736, -73.990568, ["south bronx"], station)[0]
+    assert pooled == 1.0
+    # no areas and no anchor -> neutral, same as before this feature existed
+    assert score_geo(40.72, -74.0, [])[0] == 0.5
+    d, label = nearest_geo_target(40.735736, -73.990568, [], station)
+    assert label == "14 St-Union Sq" and d < 0.1
+
+
+def test_anchor_is_a_hard_filter_like_areas_for_count():
+    """The custom anchor is a LOCATION constraint (like areas), not a
+    ranking-only nudge (like style/fit) — it must narrow the live count."""
+    from matching import count_spaces
+    far_anchor = {"label": "far away", "lat": 40.8175, "lng": -73.9185}  # South Bronx
+    plain = count_spaces(TenantRequest(property_type="Office"))
+    anchored = count_spaces(TenantRequest(property_type="Office", anchor=far_anchor))
+    assert anchored["count"] <= plain["count"]
+
+
+def test_subway_station_search():
+    """Real MTA station data — short queries return nothing (avoid dumping
+    all ~445 stations), a real station name is findable."""
+    assert search_subway_stations("") == []
+    assert search_subway_stations("u") == []
+    hits = search_subway_stations("union sq")
+    assert any("Union Sq" in s["name"] for s in hits)
+    assert all("lat" in s and "lng" in s and "routes" in s for s in hits)
+
+
 def test_style_preference_is_a_nudge_not_a_driver():
     plain = rank_spaces(TenantRequest(property_type="Office"), top_n=10**9)
     pref  = rank_spaces(TenantRequest(property_type="Office",
@@ -177,6 +230,27 @@ def test_style_preference_is_a_nudge_not_a_driver():
             assert 0 <= delta <= 3.01          # exactly the small bonus
         else:
             assert abs(delta) < 1e-9           # others untouched
+
+
+def test_fit_preference_is_a_nudge_not_a_driver():
+    """Same shape as the landlord-style nudge: a small +3 bonus ONLY for
+    spaces whose (parsed) fit-out condition matches, nothing for unknown
+    or mismatched condition — never a ranking driver."""
+    plain = rank_spaces(TenantRequest(property_type="Office"), top_n=10**9)
+    pref  = rank_spaces(TenantRequest(property_type="Office",
+                                      fit_preference="turnkey"), top_n=10**9)
+    by_key = {(r["building"], r["suite"]): r["score"] for r in plain}
+    saw_bonus = False
+    for r in pref:
+        delta = r["score"] - by_key[(r["building"], r["suite"])]
+        if r["fit_condition"] == "turnkey":
+            assert 0 <= delta <= 3.01
+            saw_bonus = True
+        else:
+            assert abs(delta) < 1e-9            # unknown AND mismatched (e.g. "raw") untouched
+    assert saw_bonus, "expected at least one turnkey-labeled listing in the dataset"
+    # a nonsense fit_preference is sanitized away, same as landlord_style
+    assert TenantRequest(property_type="Office", fit_preference="cozy").fit_preference is None
 
 
 def test_term_is_stored_but_never_scored():
@@ -267,12 +341,16 @@ def test_count_preview_shrinks_monotonically():
 
 
 def test_count_ignores_ranking_only_inputs():
-    """Vibe text, landlord style, and term rank — they must never filter."""
+    """Vibe text, landlord style, fit preference, and term rank — they must
+    never filter. (The custom anchor is DIFFERENT — it's a location
+    constraint like areas, and IS a hard filter; see
+    test_anchor_is_a_hard_filter_like_areas_for_count.)"""
     from matching import count_spaces
     plain = count_spaces(TenantRequest(property_type="Office", areas=["tribeca"]))
     styled = count_spaces(TenantRequest(property_type="Office", areas=["tribeca"],
                                         description="bright sunlit loft",
-                                        landlord_style="family-run", term="short"))
+                                        landlord_style="family-run", term="short",
+                                        fit_preference="turnkey"))
     assert plain["count"] == styled["count"]
 
 

@@ -9,15 +9,22 @@ THE FIVE SIGNALS (each scored 0..1, then weighted):
   type      does the space's use (Office/Retail/...) match what they asked for?
   size      how close is the space to their target square footage?
   budget    is the asking rent within their $/SF/year budget?
-  geo       distance (haversine) to the NEAREST of the tenant's chosen areas —
-            the tenant may now select SEVERAL submarkets
+  geo       distance (haversine) to the NEAREST of the tenant's chosen
+            areas AND/OR a single custom ANCHOR point (a subway station
+            or a geocoded address, e.g. "closer to my other office") —
+            all candidate points are pooled and the closest one wins
   semantic  meaning-similarity between their free-text wish and the
             building's description (see semantic.py)
 
-PLUS one deliberately small nudge:
+PLUS two deliberately small nudges (tiebreakers, never ranking drivers):
   landlord style — if the tenant prefers an institutional or family-run
-  landlord, matching spaces get a flat +STYLE_BONUS points (3 on a 0-100
-  scale — a tiebreaker, never a ranking driver), noted in the reason line.
+  landlord, matching spaces get a flat +STYLE_BONUS points, noted in the
+  reason line.
+  fit-out condition — if the tenant prefers turnkey/move-in-ready or a
+  raw/shell space, spaces whose LISTING TEXT says so (parsed at cleaning
+  time — see clean_dataset.py:parse_fit_condition) get +FIT_BONUS points.
+  Only ~16% of listings mention condition at all; the rest are neutral,
+  never guessed.
 
 AND one stored-only field:
   term ("short"/"long") — captured for the future landlord-contact flow,
@@ -44,6 +51,10 @@ import semantic
 WEIGHTS = {"type": 0.20, "size": 0.20, "budget": 0.15, "geo": 0.25, "semantic": 0.20}
 STYLE_BONUS = 3.0        # points (of 100) when the landlord matches the
                          # tenant's style preference — small on purpose
+FIT_BONUS = 3.0          # points (of 100) when the space's fit-out condition
+                         # matches the tenant's preference — same size as
+                         # STYLE_BONUS, same reasoning: a tiebreaker only
+FIT_LABELS = {"turnkey": "Turnkey / move-in ready", "raw": "Raw / shell condition"}
 
 # ---------------------------------------------------------------------------
 # Landlord profiles — honest, verifiable classifications:
@@ -121,6 +132,47 @@ AREA_GROUPS = {
                          "brooklyn navy yard", "south bronx", "jersey city"],
 }
 
+# ---------------------------------------------------------------------------
+# Subway stations: a real, committed snapshot of the MTA's own public station
+# list (see tools/build_subway_stations.py — same cache pattern as
+# pluto_cache.json / geocode_cache.json). Lets a tenant anchor their search
+# on "near Union Sq" instead of only a whole submarket.
+# ---------------------------------------------------------------------------
+_HERE_ANCHOR = os.path.dirname(os.path.abspath(__file__))
+try:
+    import json as _json_stations
+    with open(os.path.join(_HERE_ANCHOR, "subway_stations.json"), encoding="utf-8") as _f:
+        SUBWAY_STATIONS = _json_stations.load(_f)
+except Exception:
+    SUBWAY_STATIONS = []
+_STATIONS_BY_ID = {s["id"]: s for s in SUBWAY_STATIONS}
+
+# permissive NYC-metro bounding box — anything outside this is discarded as
+# a nonsense/mistyped anchor rather than trusted (same spirit as
+# _clean_positive below: neutralize garbage input instead of crashing on it)
+_NYC_BBOX = {"lat": (40.4, 41.1), "lng": (-74.35, -73.55)}
+
+
+def search_subway_stations(query, limit=8):
+    """Case-insensitive substring search over station names, name-prefix
+    matches ranked first. Empty/short query returns nothing (avoid dumping
+    all 445 stations into a dropdown before the tenant's typed anything)."""
+    q = (query or "").strip().lower()
+    if len(q) < 2:
+        return []
+    starts, contains = [], []
+    for s in SUBWAY_STATIONS:
+        name = s["name"].lower()
+        if name.startswith(q):
+            starts.append(s)
+        elif q in name:
+            contains.append(s)
+    return (starts + contains)[:limit]
+
+
+def find_station(station_id):
+    return _STATIONS_BY_ID.get(str(station_id))
+
 
 def _clean_positive(x):
     """Nonsense numeric input (None, NaN, <= 0) -> None ('not provided')."""
@@ -154,6 +206,12 @@ class TenantRequest:
     description: str = ""                  # free text — feeds the semantic layer
     landlord_style: str | None = None      # "institutional" | "family-run" | None
     term: str | None = None                # "short" | "long" — STORED ONLY
+    fit_preference: str | None = None      # "turnkey" | "raw" | None
+    anchor: dict | None = None             # {"label","lat","lng"} — a single
+                                            # custom "near here" point (a
+                                            # subway station or a geocoded
+                                            # address), pooled with `areas`
+                                            # in the geo signal (see score_geo)
     weights: dict = field(default_factory=lambda: dict(WEIGHTS))
 
     def __post_init__(self):
@@ -167,6 +225,29 @@ class TenantRequest:
         self.areas = valid_areas(self.areas)
         if self.landlord_style not in STYLE_LABELS:
             self.landlord_style = None
+        if self.fit_preference not in FIT_LABELS:
+            self.fit_preference = None
+        self.anchor = _clean_anchor(self.anchor)
+
+
+def _clean_anchor(anchor):
+    """A custom geo-anchor is user-controlled input (a picked station or a
+    geocoded address) — validate it the same way as every other field here:
+    silently drop it to None on anything malformed rather than crash or
+    trust a bogus point halfway across the world."""
+    if not isinstance(anchor, dict):
+        return None
+    try:
+        lat, lng = float(anchor.get("lat")), float(anchor.get("lng"))
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(lat) or math.isnan(lng):
+        return None
+    if not (_NYC_BBOX["lat"][0] <= lat <= _NYC_BBOX["lat"][1]
+            and _NYC_BBOX["lng"][0] <= lng <= _NYC_BBOX["lng"][1]):
+        return None
+    label = str(anchor.get("label") or "your location").strip()[:80]
+    return {"label": label, "lat": lat, "lng": lng}
 
 
 # ---------------------------------------------------------------------------
@@ -224,8 +305,11 @@ def haversine_km(lat1, lng1, lat2, lng2):
     return 2 * r * math.asin(math.sqrt(a))
 
 
-def nearest_area(lat, lng, area_keys):
-    """(distance_km, key) of the closest requested area, or (None, None)."""
+def nearest_geo_target(lat, lng, area_keys, anchor=None):
+    """(distance_km, label) of the closest point among the tenant's chosen
+    areas AND their custom anchor (a subway station or geocoded address),
+    pooled together — a tenant near either "SoHo" or "my other office" is
+    a fit. (None, None) if neither areas nor an anchor were given."""
     if lat != lat or lng != lng:                     # NaN -> unknown location
         return None, None
     best = None
@@ -233,20 +317,25 @@ def nearest_area(lat, lng, area_keys):
         c = AREAS[k]
         d = haversine_km(lat, lng, c[0], c[1])
         if best is None or d < best[0]:
-            best = (d, k)
+            best = (d, AREA_LABELS[k])
+    if anchor:
+        d = haversine_km(lat, lng, anchor["lat"], anchor["lng"])
+        if best is None or d < best[0]:
+            best = (d, anchor["label"])
     return best if best else (None, None)
 
 
-def score_geo(lat, lng, area_keys):
-    """Distance to the NEAREST selected area: 1.0 within 0.5 km, fading to 0
-    at 8 km. Several areas = several acceptable centers, best one counts."""
-    if not area_keys:
+def score_geo(lat, lng, area_keys, anchor=None):
+    """Distance to the NEAREST selected area OR custom anchor point: 1.0
+    within 0.5 km, fading to 0 at 8 km. Several candidates = several
+    acceptable centers, the closest one counts."""
+    if not area_keys and not anchor:
         return 0.5, "no area requested", None
-    d, k = nearest_area(lat, lng, area_keys)
+    d, label = nearest_geo_target(lat, lng, area_keys, anchor)
     if d is None:
         return 0.5, "location unknown", None
     score = 1.0 if d <= 0.5 else max(0.0, 1 - (d - 0.5) / 7.5)
-    return score, f"{d:.1f} km from {AREA_LABELS[k]}", d
+    return score, f"{d:.1f} km from {label}", d
 
 
 # ---------------------------------------------------------------------------
@@ -284,9 +373,11 @@ def count_spaces(req: TenantRequest, csv_path: str | None = None):
       type    strict (exact match only)
       size    within range, when a range is given
       budget  rejects only KNOWN rents above budget ("Upon request" passes)
-      area    within 2 km of ANY selected submarket; un-geocoded spaces fail
-    The free-text description, landlord style, and term are RANKING inputs,
-    not filters — they never change this number (tests enforce it).
+      area    within 2 km of ANY selected submarket OR the custom anchor
+              point, if either was given; un-geocoded spaces fail
+    The free-text description, landlord style, fit preference, and term
+    are RANKING inputs, not filters — they never change this number
+    (tests enforce it).
     Cheap by construction: no semantic model is touched.
     """
     csv_path = csv_path or os.path.join(_HERE, "spaces_clean.csv")
@@ -309,11 +400,11 @@ def count_spaces(req: TenantRequest, csv_path: str | None = None):
             rent = _n(row.get("rent_psf"))
             if rent is not None and rent > req.budget_max_psf:
                 continue
-        if req.areas:
+        if req.areas or req.anchor:
             lat, lng = _n(row.get("lat")), _n(row.get("lng"))
             if lat is None or lng is None:
                 continue
-            d, _k = nearest_area(lat, lng, req.areas)
+            d, _label = nearest_geo_target(lat, lng, req.areas, req.anchor)
             if d is None or d > COUNT_AREA_RADIUS_KM:
                 continue
         n += 1
@@ -343,7 +434,7 @@ def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None)
         s_type, r_type = score_type(row["space_type"], req.property_type)
         s_size, r_size = score_size(row["size_sqft"], req.size_min, req.size_max)
         s_budg, r_budg = score_budget(row["rent_psf"], req.budget_max_psf)
-        s_geo, r_geo, _d = score_geo(row["lat"], row["lng"], req.areas)
+        s_geo, r_geo, _d = score_geo(row["lat"], row["lng"], req.areas, req.anchor)
 
         w = req.weights
         total = 100 * (w["type"] * s_type + w["size"] * s_size
@@ -356,6 +447,24 @@ def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None)
         if req.landlord_style and style == req.landlord_style:
             total = min(100.0, total + STYLE_BONUS)
             style_note = f"; {STYLE_LABELS[style].lower()} (your preference, +{STYLE_BONUS:.0f})"
+
+        # small, transparent fit-out-condition nudge (a tiebreaker by design;
+        # unknown/mismatched condition gets neither bonus NOR penalty)
+        fit = _s(row.get("fit_condition")) or None
+        fit_note = ""
+        if req.fit_preference and fit == req.fit_preference:
+            total = min(100.0, total + FIT_BONUS)
+            fit_note = f"; {FIT_LABELS[fit].lower()} (your preference, +{FIT_BONUS:.0f})"
+
+        # distance to the tenant's custom anchor point (a subway station or
+        # geocoded address) — shown ALWAYS when an anchor is set, regardless
+        # of whether it happened to be the nearest candidate for scoring
+        anchor_km = anchor_label = None
+        if req.anchor:
+            lat_v, lng_v = _n(row["lat"]), _n(row["lng"])
+            if lat_v is not None and lng_v is not None:
+                anchor_km = round(haversine_km(lat_v, lng_v, req.anchor["lat"], req.anchor["lng"]), 2)
+            anchor_label = req.anchor["label"]
 
         slug = _s(row["source_url"]).rstrip("/").split("/")[-1]
         results.append({
@@ -379,9 +488,12 @@ def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None)
             "year_built": None if row.get("year_built") != row.get("year_built")
                           else int(row["year_built"]),
             "reason": f"{r_type}; {r_size}; {r_budg}; {r_geo}; "
-                      f"description match {sem:.2f}{style_note}",
+                      f"description match {sem:.2f}{style_note}{fit_note}",
             "signals": {"type": s_type, "size": s_size, "budget": s_budg,
                         "geo": s_geo, "semantic": round(sem, 3)},
+            "fit_condition": fit,
+            "anchor_distance_km": anchor_km,
+            "anchor_label": anchor_label,
             # RULE 1 (price_model.py): estimates are informational only.
             # They exist ONLY for display on unknown-rent spaces — scoring
             # and counting above never see them (test-enforced).

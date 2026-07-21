@@ -162,6 +162,39 @@ button { font-family:inherit; }
 .quick button { border:none; background:var(--blue-soft); color:var(--blue-ink); font-size:.72rem; font-weight:600; padding:4px 10px; border-radius:999px; cursor:pointer; transition:filter .12s; }
 .quick button:hover { filter:brightness(.93); }
 
+/* "near a place" anchor search */
+.anchorwrap { position:relative; }
+.anchorwrap input {
+  width:100%; box-sizing:border-box; font:inherit; font-size:.88rem; color:var(--ink);
+  background:var(--card2); border:1.5px solid var(--line); border-radius:var(--r-sm); padding:8px 11px;
+}
+.anchorwrap input:focus { border-color:var(--blue); outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--blue) 18%, transparent); }
+.anchordrop {
+  position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--card);
+  border:1px solid var(--line); border-radius:var(--r-sm); box-shadow:var(--shadow-2);
+  max-height:260px; overflow-y:auto; z-index:40;
+}
+.anchordrop .opt { padding:8px 11px; cursor:pointer; font-size:.8rem; display:flex; flex-direction:column; gap:1px; }
+.anchordrop .opt:hover, .anchordrop .opt.hi { background:var(--blue-soft); }
+.anchordrop .opt b { color:var(--ink); font-weight:600; }
+.anchordrop .opt span { color:var(--ink-soft); font-size:.7rem; }
+.anchordrop .addr { border-top:1px solid var(--line2); color:var(--blue); font-weight:600; }
+.anchordrop .empty { padding:9px 11px; font-size:.76rem; color:var(--ink-faint); }
+.anchorchiprow { margin-top:9px; }
+.anchorchip {
+  display:inline-flex; align-items:center; gap:7px; border:1.5px solid var(--teal);
+  background:var(--teal-soft); color:var(--teal); border-radius:999px; padding:5px 6px 5px 12px;
+  font-size:.78rem; font-weight:600; max-width:100%;
+}
+.anchorchip .lbl { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.anchorchip button {
+  border:none; background:transparent; color:inherit; cursor:pointer; font-size:.8rem;
+  line-height:1; padding:3px 5px; border-radius:50%; flex:none;
+}
+.anchorchip button:hover { background:color-mix(in srgb, var(--teal) 22%, transparent); }
+.mchip.anchor { background:var(--teal-soft); color:var(--teal); border-color:var(--teal); }
+.mchip.fit { background:var(--blue-soft); color:var(--blue-ink); }
+
 /* vibe chips */
 .chips { display:flex; flex-wrap:wrap; gap:7px; margin-top:9px; }
 .chip { display:inline-flex; align-items:center; gap:6px; border:1px dashed var(--line); background:transparent; color:var(--ink-soft);
@@ -416,6 +449,14 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
         <h3><span class="n">2</span> Where? <span class="opt">pick any number</span></h3>
         <div id="areapills"></div>
         <p class="hint" id="areahint">No areas selected — searching all of NYC.</p>
+        <div class="glabel" style="margin-top:14px">Or near a specific place
+          <span class="tip" data-t="Anchor on a subway station or any address — like another office you already have. This ADDS to the areas above rather than replacing them: a space counts as close if it's near ANY of your areas OR this point.">?</span>
+        </div>
+        <div class="anchorwrap">
+          <input id="anchorq" type="text" placeholder="Subway station or address…" autocomplete="off">
+          <div class="anchordrop" id="anchordrop" hidden></div>
+        </div>
+        <div class="anchorchiprow" id="anchorchiprow"></div>
       </div>
       <div class="step">
         <h3><span class="n">3</span> The practical stuff <span class="opt">all optional</span></h3>
@@ -433,6 +474,10 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
           <div class="field"><label for="style">Landlord type
             <span class="tip" data-t="A small tiebreaker (+3 points), never a ranking driver. Institutional = public REIT; family-run = private family firm.">?</span></label>
             <select id="style"><option value="">No preference</option></select>
+          </div>
+          <div class="field"><label for="fit">Space condition
+            <span class="tip" data-t="A small tiebreaker (+3 points), never a ranking driver. Parsed from each listing's own description — most don't mention it, and those are scored neutrally, never penalized.">?</span></label>
+            <select id="fit"><option value="">No preference</option></select>
           </div>
         </div>
         <div class="quick" id="sizequick"></div>
@@ -618,6 +663,102 @@ function renderAreaPills(groups) {
   }));
 }
 
+/* ---------------- fit-out condition (badge label lookup) --------------- */
+const FIT_LOOKUP = {};
+
+/* ---------------- "near a place" anchor search -------------------------
+   One optional custom geo-anchor (a subway station or a geocoded address)
+   that ADDS to the selected areas rather than replacing them — a space
+   counts as close if it's near any area OR this point (mirrors the
+   backend: matching.py's score_geo pools areas + anchor into one nearest-
+   candidate check). Resolved to a plain lat/lng CLIENT-side so /api/match
+   and /api/count never re-geocode per search. --------------------------- */
+let anchor = null;                       // {label, lat, lng} | null
+let anchorItems = [], anchorHi = -1;
+let anchorTimer = null, anchorCtrl = null, anchorSeq = 0;
+
+function renderAnchorChip() {
+  const row = $("anchorchiprow");
+  if (!anchor) { row.innerHTML = ""; return; }
+  row.innerHTML = `<span class="anchorchip"><span class="lbl">📍 Near ${esc(anchor.label)}</span>
+    <button type="button" id="anchorclear" aria-label="Remove anchor point">✕</button></span>`;
+  $("anchorclear").addEventListener("click", () => setAnchor(null));
+}
+function setAnchor(a) {
+  anchor = a;
+  $("anchorq").value = "";
+  hideAnchorDrop();
+  renderAnchorChip();
+  refreshCount();
+}
+function hideAnchorDrop() { $("anchordrop").hidden = true; anchorItems = []; anchorHi = -1; }
+function renderAnchorDrop() {
+  const drop = $("anchordrop");
+  if (!anchorItems.length) {
+    const q = $("anchorq").value.trim();
+    drop.innerHTML = `<div class="empty">${q.length >= 3
+      ? "No subway stations match — press Enter to search this as an address."
+      : "Keep typing a station name or address…"}</div>`;
+    drop.hidden = false;
+    return;
+  }
+  drop.innerHTML = anchorItems.map((it, i) => {
+    const cls = "opt" + (it.type === "address" ? " addr" : "") + (i === anchorHi ? " hi" : "");
+    return it.type === "station"
+      ? `<div class="${cls}" data-i="${i}"><b>🚇 ${esc(it.label)}</b><span>${esc(it.borough)} · ${esc(it.routes)}</span></div>`
+      : `<div class="${cls}" data-i="${i}"><b>🔎 Search “${esc(it.label)}” as an address</b></div>`;
+  }).join("");
+  drop.hidden = false;
+  drop.querySelectorAll(".opt").forEach(el => el.addEventListener("click", () => selectAnchorItem(+el.dataset.i)));
+}
+async function selectAnchorItem(i) {
+  const it = anchorItems[i];
+  if (!it) return;
+  if (it.type === "station") { setAnchor({ label: `${it.label} (${it.routes})`, lat: it.lat, lng: it.lng }); return; }
+  $("anchorq").disabled = true;
+  try {
+    const r = await fetch("/api/geocode?" + new URLSearchParams({ q: it.label }));
+    const d = await r.json();
+    if (d.found) setAnchor({ label: d.label, lat: d.lat, lng: d.lng });
+    else toast(`Couldn't find "${it.label}" — try a fuller street address`);
+  } catch (e) { toast("Couldn't reach the geocoder — try again"); }
+  finally { $("anchorq").disabled = false; hideAnchorDrop(); }
+}
+$("anchorq").addEventListener("input", () => {
+  const q = $("anchorq").value.trim();
+  clearTimeout(anchorTimer);
+  if (q.length < 2) { hideAnchorDrop(); return; }
+  anchorTimer = setTimeout(async () => {
+    const seq = ++anchorSeq;
+    try {
+      if (anchorCtrl) anchorCtrl.abort();
+      anchorCtrl = new AbortController();
+      const r = await fetch("/api/subway-stations?" + new URLSearchParams({ q }), { signal: anchorCtrl.signal });
+      if (seq !== anchorSeq) return;
+      const d = await r.json();
+      anchorItems = (d.results || []).map(s =>
+        ({ type: "station", label: s.name, borough: s.borough, routes: s.routes, lat: s.lat, lng: s.lng }));
+      if (q.length >= 3) anchorItems.push({ type: "address", label: q });
+      anchorHi = -1;
+      renderAnchorDrop();
+    } catch (e) { /* aborted — a newer keystroke is already in flight */ }
+  }, 220);
+});
+$("anchorq").addEventListener("keydown", e => {
+  if ($("anchordrop").hidden) return;
+  if (e.key === "ArrowDown") { e.preventDefault(); anchorHi = Math.min(anchorHi + 1, anchorItems.length - 1); renderAnchorDrop(); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); anchorHi = Math.max(anchorHi - 1, 0); renderAnchorDrop(); }
+  else if (e.key === "Enter") {
+    e.preventDefault();
+    if (anchorHi >= 0) selectAnchorItem(anchorHi);
+    else {
+      const addrIdx = anchorItems.findIndex(it => it.type === "address");
+      if (addrIdx >= 0) selectAnchorItem(addrIdx);
+    }
+  } else if (e.key === "Escape") { hideAnchorDrop(); }
+});
+document.addEventListener("click", e => { if (!e.target.closest(".anchorwrap")) hideAnchorDrop(); });
+
 /* ---------------- size quick helpers ----------------------------------- */
 const SIZEQUICK = [
   ["Team of ~10", 1200, 3000], ["Team of ~25", 3000, 7000],
@@ -680,6 +821,7 @@ $("personas").querySelectorAll(".persona").forEach(b => b.addEventListener("clic
   selectedAreas.clear(); (s.areas || []).forEach(k => selectedAreas.add(k));
   renderAreaPills(window.__groups || {});
   $("areahint").innerHTML = `<b>${selectedAreas.size}</b> area${selectedAreas.size > 1 ? "s" : ""} selected.`;
+  setAnchor(null);
   $("smin").value = s.smin || ""; $("smax").value = s.smax || ""; $("budget").value = s.budget || "";
   $("q").value = s.q || ""; syncChips();
   refreshCount();
@@ -694,10 +836,14 @@ function params(withRankInputs = true) {
   if ($("smax").value)   p.set("size_max", $("smax").value);
   if ($("budget").value) p.set("budget", $("budget").value);
   selectedAreas.forEach(k => p.append("area", k));
+  if (anchor) {   // a location constraint, like areas — included even for the count-only preview
+    p.set("anchor_lat", anchor.lat); p.set("anchor_lng", anchor.lng); p.set("anchor_label", anchor.label);
+  }
   if (withRankInputs) {
     p.set("q", $("q").value);
     if ($("style").value) p.set("landlord_style", $("style").value);
     if ($("term").value)  p.set("term", $("term").value);
+    if ($("fit").value)   p.set("fit", $("fit").value);
   }
   return p;
 }
@@ -751,6 +897,12 @@ fetch("/api/areas").then(r => r.json()).then(d => {
     const o = document.createElement("option");
     o.value = s.key; o.textContent = s.label;
     $("style").appendChild(o);
+  }
+  for (const s of d.fit_conditions || []) {
+    const o = document.createElement("option");
+    o.value = s.key; o.textContent = s.label;
+    $("fit").appendChild(o);
+    FIT_LOOKUP[s.key] = s.label;
   }
   $("backend").textContent = `(backend: ${d.semantic_backend.split(",")[0]})`;
   $("backendfoot").textContent = `Text matching backend: ${d.semantic_backend}.`;
@@ -851,20 +1003,28 @@ function writeUrl() {
   if ($("smax").value) p.set("smax", $("smax").value);
   if ($("budget").value) p.set("budget", $("budget").value);
   if (selectedAreas.size) p.set("areas", [...selectedAreas].join(","));
+  if (anchor) { p.set("alat", anchor.lat); p.set("alng", anchor.lng); p.set("alabel", anchor.label); }
   if ($("style").value) p.set("style", $("style").value);
   if ($("term").value) p.set("term", $("term").value);
+  if ($("fit").value) p.set("fit", $("fit").value);
   if ($("q").value.trim()) p.set("q", $("q").value.trim());
   history.replaceState(null, "", p.toString() ? "?" + p.toString() : location.pathname);
 }
 function readUrl() {
   const p = new URLSearchParams(location.search);
-  if (![...p.keys()].some(k => ["type","smin","smax","budget","areas","style","term","q"].includes(k))) return false;
+  const KEYS = ["type","smin","smax","budget","areas","alat","alng","style","term","fit","q"];
+  if (![...p.keys()].some(k => KEYS.includes(k))) return false;
   if (p.get("type")) { curType = p.get("type"); renderTypes(); }
   $("smin").value = p.get("smin") || ""; $("smax").value = p.get("smax") || "";
   $("budget").value = p.get("budget") || "";
   selectedAreas.clear();
   (p.get("areas") || "").split(",").filter(Boolean).forEach(k => selectedAreas.add(k));
+  if (p.get("alat") && p.get("alng")) {
+    anchor = { lat: parseFloat(p.get("alat")), lng: parseFloat(p.get("alng")), label: p.get("alabel") || "your location" };
+    renderAnchorChip();
+  }
   $("style").value = p.get("style") || ""; $("term").value = p.get("term") || "";
+  $("fit").value = p.get("fit") || "";
   $("q").value = p.get("q") || ""; syncChips();
   return true;
 }
@@ -965,7 +1125,7 @@ function signalBars(sig, top) {
   const used = {
     size:  !!($("smin").value || $("smax").value),
     budget:!!$("budget").value,
-    geo:   selectedAreas.size > 0,
+    geo:   selectedAreas.size > 0 || !!anchor,
     vibe:  !!$("q").value.trim(),
   };
   const rentKnown = top.rent_psf !== null && top.rent_psf !== undefined && top.rent_psf === top.rent_psf;
@@ -982,9 +1142,9 @@ function signalBars(sig, top) {
   if (!used.budget) cell("budget", 0, "You didn't set a budget, so price isn't scored for anyone.", "—");
   else if (!rentKnown) cell("budget", 0, "This landlord doesn't publish the rent ('upon request'). We refuse to guess — unknown price is scored neutrally so it can't punish or reward this listing. Ask via Request intro.", "n/a");
   else cell("budget", Math.round(100 * sig.budget), "100% = the published rent is within your budget; drops off with the % over.");
-  if (!used.geo) cell("area", 0, "You didn't pick any areas, so location isn't scored — all of NYC is fair game.", "—");
+  if (!used.geo) cell("area", 0, "You didn't pick any areas or a place to search near, so location isn't scored — all of NYC is fair game.", "—");
   else if (!geoKnown) cell("area", 0, "We couldn't verify this building's exact coordinates, so distance is scored neutrally rather than invented.", "n/a");
-  else cell("area", Math.round(100 * sig.geo), "How close the building is to the nearest of your chosen areas. 100% = within half a kilometer.");
+  else cell("area", Math.round(100 * sig.geo), "How close the building is to the nearest of your chosen areas or your custom place. 100% = within half a kilometer.");
   if (!used.vibe) cell("vibe", 0, "You didn't describe what you're looking for, so description-matching isn't scored. Try the suggestion chips!", "—");
   else cell("vibe", Math.round(100 * sig.semantic), "How similar the building's own description is to your words — matched by meaning (embeddings), not just keywords. 'Sunlit' finds 'excellent natural light'.");
   return `<div class="bars">` + cells.join("") + `</div>`;
@@ -1013,6 +1173,8 @@ function mailtoHref(email, g) {
     ($("budget").value ? `- Budget: ~$${$("budget").value}/SF/yr\n` : "") +
     (term ? `- Lease term: ${term === "short" ? "short (under ~3 years)" : "long (3+ years)"}\n` : "") +
     (selectedAreas.size ? `- Areas: ${[...selectedAreas].map(k => AREA_LOOKUP[k] || k).join(", ")}\n` : "") +
+    (anchor ? `- Near: ${anchor.label}\n` : "") +
+    ($("fit").value ? `- Preferred condition: ${FIT_LOOKUP[$("fit").value] || $("fit").value}\n` : "") +
     `\nSuites of interest: ${g.spaces.slice(0, 3).map(s => s.suite).join("; ")}\n\nThank you`);
   return `mailto:${email}?subject=${subject}&body=${body}`;
 }
@@ -1022,7 +1184,7 @@ function mailtoHref(email, g) {
    say it. Keep only the informative parts. */
 function cleanReason(txt) {
   const used = { size: !!($("smin").value || $("smax").value), budget: !!$("budget").value,
-                 geo: selectedAreas.size > 0, vibe: !!$("q").value.trim() };
+                 geo: selectedAreas.size > 0 || !!anchor, vibe: !!$("q").value.trim() };
   const parts = (txt || "").split(/;\s*/).filter(p => {
     const s = p.toLowerCase();
     if (!used.size   && /size target|no size/.test(s)) return false;
@@ -1055,7 +1217,10 @@ function groupCard(g, i) {
         <div class="bmeta">${llchip(g.landlord)}
           <span class="mchip">${g.spaces.length} matching space${g.spaces.length > 1 ? "s" : ""}</span>
           ${top.year_built ? `<span class="mchip">built ${top.year_built}</span>` : ""}
-          <span class="mchip">${esc(top.borough)}</span></div>
+          <span class="mchip">${esc(top.borough)}</span>
+          ${top.fit_condition ? `<span class="mchip fit" data-tt="Parsed from this listing's own description text.">${esc(FIT_LOOKUP[top.fit_condition] || top.fit_condition)}</span>` : ""}
+          ${top.anchor_distance_km != null ? `<span class="mchip anchor ttd" data-tt="Straight-line distance to ${esc(top.anchor_label)}, the place you searched near.">📍 ${top.anchor_distance_km.toFixed(1)} km from ${esc(top.anchor_label)}</span>` : ""}
+        </div>
         ${signalBars(top.signals, top)}
       </div>
       ${ring(top.score)}
@@ -1146,6 +1311,7 @@ function cartoUrl() {
 }
 function restyleMapForTheme() { if (tileLayer) tileLayer.setUrl(cartoUrl()); }
 let mapPts = [];
+let anchorMarker = null, gAnchorMarker = null;
 function drawMap(groups) {
   mapPts = groups.filter(g => g.spaces[0].lat && g.spaces[0].lng);
   if (GMAPS_KEY) return drawGoogleMap();
@@ -1170,11 +1336,20 @@ function drawMap(groups) {
         <a href="${r.url}" target="_blank" rel="noopener">listing ↗</a></div>`)
       .addTo(markerLayer);
   });
+  if (anchorMarker) { map.removeLayer(anchorMarker); anchorMarker = null; }
+  if (anchor) {
+    const aIcon = L.divIcon({ className: "", iconSize: [30, 38], iconAnchor: [15, 36],
+      html: `<div style="font-size:30px;line-height:30px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))">📍</div>` });
+    anchorMarker = L.marker([anchor.lat, anchor.lng], { icon: aIcon, zIndexOffset: 1000 })
+      .bindPopup(`<div style="color:#1a2233"><b>${esc(anchor.label)}</b><br>Your search anchor</div>`)
+      .addTo(map);
+  }
   fitMap();
 }
 function fitMap() {
   if (!mapPts.length) return;
   const bounds = mapPts.map(g => [g.spaces[0].lat, g.spaces[0].lng]);
+  if (anchor) bounds.push([anchor.lat, anchor.lng]);
   if (gmap) {
     const b = new google.maps.LatLngBounds();
     bounds.forEach(([la, ln]) => b.extend({ lat: la, lng: ln }));
@@ -1199,6 +1374,15 @@ function drawGoogleMap() {
       });
       gMarkers.push(m);
     });
+    if (gAnchorMarker) { gAnchorMarker.setMap(null); gAnchorMarker = null; }
+    if (anchor) {
+      gAnchorMarker = new google.maps.Marker({ position: { lat: anchor.lat, lng: anchor.lng }, map: gmap,
+        label: { text: "📍", fontSize: "20px" }, zIndex: 1000 });
+      gAnchorMarker.addListener("click", () => {
+        info.setContent(`<div style="color:#1a2233"><b>${esc(anchor.label)}</b><br>Your search anchor</div>`);
+        info.open(gmap, gAnchorMarker);
+      });
+    }
     fitMap();
   };
   if (window.google && google.maps) render();
@@ -1217,7 +1401,9 @@ function searchPills() {
   if ($("smin").value || $("smax").value) pills.push(`${$("smin").value || "?"}–${$("smax").value || "?"} sq ft`);
   if ($("budget").value) pills.push(`≤ $${$("budget").value}/SF/yr`);
   selectedAreas.forEach(k => pills.push(AREA_LOOKUP[k] || k));
+  if (anchor) pills.push(`near ${anchor.label}`);
   if ($("term").value) pills.push($("term").value === "short" ? "short lease" : "long lease (3+ yrs)");
+  if ($("fit").value) pills.push(FIT_LOOKUP[$("fit").value] || $("fit").value);
   if ($("q").value.trim()) pills.push(`“${$("q").value.trim().slice(0, 60)}”`);
   return pills;
 }

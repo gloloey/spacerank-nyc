@@ -95,6 +95,33 @@ def parse_rent_psf(rent):
     return float(m.group(1).replace(",", "")) if m else float("nan")
 
 
+# Commercial listings almost never say "furnished" (that's a residential
+# term) — what they DO sometimes say is the fit-out CONDITION, which is the
+# honest equivalent: turnkey/pre-built/move-in-ready space has furniture
+# and finishes ready to use, raw/whitebox/shell space is an empty box the
+# tenant builds out themselves. Only ~16% of listings mention either — the
+# rest are left "" (unknown), scored neutrally, never guessed.
+_TURNKEY_RE = re.compile(
+    r"\bturnkey\b|\bpre-?built\b|\bmove-?in ready\b|\bfurnished\b|"
+    r"\bplug[\s-]and[\s-]play\b|\bbuilt-?out\b", re.I)
+_RAW_RE = re.compile(r"\braw\b|\bwhite ?box\b|\bshell\b|\bunfurnished\b", re.I)
+
+
+def parse_fit_condition(description):
+    """"turnkey" | "raw" | "" (unknown) — first real signal found, checked
+    in this order because a description mentioning both ("raw space that
+    can be built out turnkey for you") is describing an offer, not a fact
+    about the space's CURRENT condition, and "turnkey" is the more specific,
+    tenant-relevant claim in that case."""
+    if not isinstance(description, str):
+        return ""
+    if _TURNKEY_RE.search(description):
+        return "turnkey"
+    if _RAW_RE.search(description):
+        return "raw"
+    return ""
+
+
 def load_pluto():
     """Only the columns we need, keyed by normalized address.
     Returns None when manhattan_pluto.csv is absent (e.g. on a CI runner —
@@ -223,6 +250,7 @@ def main():
     is_sample = df["floor_suite"].fillna("").astype(str).str.contains("Sample", case=False)
     df["is_available"] = is_space & ~is_leased & ~is_sample
     df["size_sqft"] = pd.to_numeric(df["size_sqft"], errors="coerce")
+    df["fit_condition"] = df["description"].map(parse_fit_condition)
 
     df.to_csv("spaces_clean.csv", index=False)
 

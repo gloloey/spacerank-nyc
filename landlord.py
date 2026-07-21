@@ -28,7 +28,7 @@ from collections import defaultdict
 
 import semantic
 from matching import (AREA_LABELS, AREAS, LANDLORD_PROFILES, STYLE_LABELS,
-                      TenantRequest, nearest_area, rank_spaces)
+                      TenantRequest, nearest_geo_target, rank_spaces)
 
 ORDER_WEIGHTS = {"match_number": 0.40, "specialization": 0.25, "match_strength": 0.35}
 STRENGTH_WEIGHTS = {"size": 0.25, "budget": 0.15, "geo": 0.30, "semantic": 0.30}
@@ -40,14 +40,15 @@ STYLE_ORDER_BONUS = 0.04
 
 
 def _in_area(space, req):
-    """Within AREA_RADIUS_KM of ANY selected submarket. Unknown coords fail
-    (we never claim a location we can't verify). No areas -> True."""
-    if not req.areas:
+    """Within AREA_RADIUS_KM of ANY selected submarket OR the custom anchor
+    point. Unknown coords fail (we never claim a location we can't verify).
+    No areas and no anchor -> True."""
+    if not req.areas and not req.anchor:
         return True
     lat, lng = space.get("lat"), space.get("lng")
     if lat is None or lng is None:
         return False
-    d, _ = nearest_area(lat, lng, req.areas)
+    d, _ = nearest_geo_target(lat, lng, req.areas, req.anchor)
     return d is not None and d <= AREA_RADIUS_KM
 
 

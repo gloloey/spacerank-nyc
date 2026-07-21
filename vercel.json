@@ -17,6 +17,7 @@
           "models/**",
           "building_images.json",
           "dataset_meta.json",
+          "subway_stations.json",
           "price_model.py",
           "price_model.json"
         ]
