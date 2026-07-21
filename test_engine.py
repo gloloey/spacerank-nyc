@@ -9,8 +9,9 @@ happy path — if someone changes "unknown rent is neutral", a test fails.
 import math
 
 from landlord import rank_landlords
-from matching import (TenantRequest, haversine_km, rank_spaces, score_budget,
-                      score_geo, score_size, score_type)
+from matching import (LANDLORD_PROFILES, TenantRequest, haversine_km,
+                      rank_spaces, score_budget, score_geo, score_size,
+                      score_type)
 
 NAN = float("nan")
 
@@ -75,8 +76,11 @@ def test_rank_spaces_geo_actually_moves_ranking():
 def test_landlord_v2_shape_and_bounds():
     res = rank_landlords(TenantRequest(property_type="Office", areas=["penn district & garment"],
                                        description="renovated lobby"))
-    assert {r["landlord"] for r in res} == {"GFP Real Estate",
-                                            "Rudin Management", "SL Green"}
+    # Which landlords make the top-N shifts as the scraped dataset grows
+    # (new landlords, new coverage) — pin the invariant, not a fixed roster.
+    names = [r["landlord"] for r in res]
+    assert names and len(names) == len(set(names))     # no duplicates
+    assert set(names) <= set(LANDLORD_PROFILES)         # only real landlords, never invented
     orderings = [r["ordering"] for r in res]
     assert orderings == sorted(orderings, reverse=True)
     for r in res:
