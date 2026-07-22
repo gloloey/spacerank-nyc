@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Local-only working notes (not for the public repo)
+HANDOFF.md
+INTERVIEW_PREP.md
+
+# Local data not needed by CI/deploy (23 MB PLUTO source; pluto_cache.json is committed instead)
+manhattan_pluto.csv
+
+# Secrets (none tracked today; guard against future accidents)
+.env
+.env.local
+*.pem
+*.key
+
+# Editor/OS cruft
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

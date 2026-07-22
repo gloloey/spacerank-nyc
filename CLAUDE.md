@@ -1,7 +1,9 @@
 # CLAUDE.md — SpaceRank NYC
 
-Persistent instructions for Claude Code. Read HANDOFF.md for full project
-state before doing anything substantial.
+Persistent instructions for Claude Code. HANDOFF.md and INTERVIEW_PREP.md
+hold full project state and interview notes but are kept out of the public
+repo (git-ignored, local-only) — check the working directory for them
+before doing anything substantial.
 
 ## What this is
 A commercial real-estate matching engine for NYC, live at
@@ -21,11 +23,18 @@ rusty Python) as a portfolio project for interviews.
    filtering, or counts (tests enforce this).
 3. **Scrape politely, owner sites only.** Honest User-Agent, rate limits,
    ownership-side leasing contacts only — never brokers. The scraped
-   dataset is not republished elsewhere.
-4. **No secrets in this repo.** There are none today (free APIs only). If a
-   feature needs a credential (e.g. Vercel Postgres for leads), Gabriel
-   creates it himself; code reads it from an env var.
-5. **Keep the repo private.**
+   dataset (including contact info) is published as part of this public
+   repo and served by the live app — that's the product. Don't add data
+   beyond what the owner sites themselves publish.
+4. **No secrets in this repo.** A Google Maps browser key was committed by
+   mistake once (since revoked) — see HANDOFF.md for the incident. If a
+   feature needs a credential, Gabriel creates it himself; code reads it
+   from an env var, never hardcoded. Before committing, check for API keys,
+   tokens, or credentials in diffs — especially in `index.html`.
+5. **The repo is public.** It's a portfolio piece — assume anything
+   committed here is visible to recruiters and the internet. HANDOFF.md and
+   INTERVIEW_PREP.md are the exception: git-ignored, local-only, since
+   they're working notes rather than polished documentation.
 
 ## Architecture in one paragraph
 `scrape_*.py` (one per landlord, requests+BS4) → `*_listings.csv` →
