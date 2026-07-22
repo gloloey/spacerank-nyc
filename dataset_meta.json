@@ -1,9 +1,9 @@
 {
- "refreshed_at": "2026-07-22T19:22:09Z",
- "total_rows": 1015,
- "available_spaces": 905,
- "buildings": 236,
- "buildings_with_availability": 165,
+ "refreshed_at": "2026-07-22T19:24:26Z",
+ "total_rows": 1034,
+ "available_spaces": 924,
+ "buildings": 241,
+ "buildings_with_availability": 170,
  "landlords": [
   "Brookfield Properties",
   "Empire State Realty Trust",
@@ -17,6 +17,7 @@
   "Silverstein Properties",
   "The Durst Organization",
   "The Feil Organization",
+  "Two Trees Management",
   "Vornado Realty Trust"
  ],
  "per_landlord": {
@@ -67,6 +68,10 @@
   "The Feil Organization": {
    "rows": 94,
    "available": 94
+  },
+  "Two Trees Management": {
+   "rows": 19,
+   "available": 19
   },
   "Vornado Realty Trust": {
    "rows": 167,

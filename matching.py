@@ -75,6 +75,7 @@ LANDLORD_PROFILES = {
     "Paramount Group":           "institutional",   # public REIT (NYSE: PGRE)
     "Jack Resnick & Sons":       "family-run",      # Resnick family, founded 1928
     "The Feil Organization":     "family-run",      # Feil family, still family-led
+    "Two Trees Management":      "family-run",      # founded by David Walentas, CEO son Jed Walentas
     # RXR Realty is intentionally NOT classified: privately held (founded/led
     # by Scott Rechler), neither a public REIT nor a multi-generation family
     # firm in the Rudin/Durst/GFP/Silverstein sense — landlord_style stays
