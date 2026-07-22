@@ -77,6 +77,7 @@ LANDLORD_PROFILES = {
     "The Feil Organization":     "family-run",      # Feil family, still family-led
     "Two Trees Management":      "family-run",      # founded by David Walentas, CEO son Jed Walentas
     "George Comfort & Sons":     "family-run",      # Comfort family, still family-led
+    "Brause Realty":             "family-run",      # Brause family (David, Roberta, Melissa Brause Rackoff)
     # RXR Realty is intentionally NOT classified: privately held (founded/led
     # by Scott Rechler), neither a public REIT nor a multi-generation family
     # firm in the Rudin/Durst/GFP/Silverstein sense — landlord_style stays

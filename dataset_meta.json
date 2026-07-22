@@ -1,10 +1,11 @@
 {
- "refreshed_at": "2026-07-22T21:00:49Z",
- "total_rows": 1112,
- "available_spaces": 1002,
- "buildings": 259,
- "buildings_with_availability": 188,
+ "refreshed_at": "2026-07-22T21:14:12Z",
+ "total_rows": 1123,
+ "available_spaces": 1013,
+ "buildings": 270,
+ "buildings_with_availability": 199,
  "landlords": [
+  "Brause Realty",
   "Brookfield Properties",
   "Empire State Realty Trust",
   "GFP Real Estate",
@@ -23,6 +24,10 @@
   "Vornado Realty Trust"
  ],
  "per_landlord": {
+  "Brause Realty": {
+   "rows": 11,
+   "available": 11
+  },
   "Brookfield Properties": {
    "rows": 46,
    "available": 28
