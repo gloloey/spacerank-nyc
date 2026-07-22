@@ -1,9 +1,9 @@
 {
- "refreshed_at": "2026-07-22T19:10:10Z",
- "total_rows": 907,
- "available_spaces": 797,
- "buildings": 219,
- "buildings_with_availability": 148,
+ "refreshed_at": "2026-07-22T19:13:21Z",
+ "total_rows": 921,
+ "available_spaces": 811,
+ "buildings": 223,
+ "buildings_with_availability": 152,
  "landlords": [
   "Brookfield Properties",
   "Empire State Realty Trust",
@@ -13,6 +13,7 @@
   "RXR Realty",
   "Rudin Management",
   "SL Green",
+  "Sage Realty",
   "Silverstein Properties",
   "The Durst Organization",
   "Vornado Realty Trust"
@@ -49,6 +50,10 @@
   "SL Green": {
    "rows": 225,
    "available": 203
+  },
+  "Sage Realty": {
+   "rows": 14,
+   "available": 14
   },
   "Silverstein Properties": {
    "rows": 7,
