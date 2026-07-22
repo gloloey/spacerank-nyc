@@ -1,13 +1,14 @@
 {
- "refreshed_at": "2026-07-22T19:29:49Z",
- "total_rows": 1047,
- "available_spaces": 937,
- "buildings": 250,
- "buildings_with_availability": 179,
+ "refreshed_at": "2026-07-22T21:00:49Z",
+ "total_rows": 1112,
+ "available_spaces": 1002,
+ "buildings": 259,
+ "buildings_with_availability": 188,
  "landlords": [
   "Brookfield Properties",
   "Empire State Realty Trust",
   "GFP Real Estate",
+  "George Comfort & Sons",
   "Jack Resnick & Sons",
   "Paramount Group",
   "RXR Realty",
@@ -33,6 +34,10 @@
   "GFP Real Estate": {
    "rows": 147,
    "available": 116
+  },
+  "George Comfort & Sons": {
+   "rows": 65,
+   "available": 65
   },
   "Jack Resnick & Sons": {
    "rows": 28,
