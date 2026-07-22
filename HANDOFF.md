@@ -1,8 +1,9 @@
 # HANDOFF.md — SpaceRank NYC → Claude Code
 
-Written 2026-07-20, updated 2026-07-21 after a session that added landlords
-#7–9, two new search filters, and fixed a real geocoding bug. Read CLAUDE.md
-first for the standing rules; this file is the full state of the world.
+Written 2026-07-20, updated 2026-07-21 (landlords #7–9, two new search
+filters, a geocoding bug fix), updated again 2026-07-22 after a mass
+landlord-expansion run (#10–17). Read CLAUDE.md first for the standing
+rules; this file is the full state of the world.
 
 ## 0. Source of truth & git state (READ FIRST)
 
@@ -27,31 +28,55 @@ landlords with ownership-side contacts. Headline tech: semantic matching
 via text embeddings; a from-scratch rent-estimation model. Live at
 **https://spacerank-nyc.vercel.app**. Deadline: late August 2026.
 
-## 2. What is completed (as of 2026-07-21, all verified live)
+## 2. What is completed (as of 2026-07-22, all verified live)
 
-- **Nine landlord scrapers** (each documents its site's architecture in its
-  docstring): GFP (hidden JSON API + BS4), Rudin (server-rendered Drupal),
-  SL Green (WordPress/Divi, 3×-rendered rows deduped), Vornado
-  (server-rendered portfolio pages, embedded coords, NYC bbox filter),
-  Durst (single availabilities page, per-suite COMMENTS descriptions,
-  address pulled from each page's own `<meta name="keywords">` — see §3),
-  ESRT (WordPress cards, lazy-load image gotcha handled), **Brookfield
-  Properties** (public Algolia index to enumerate properties + embedded
-  `Fusion.globalContent` JSON per page — exact per-suite sqft/floor/coords/
-  named contacts), **RXR Realty** (corporate site has no listings at all;
-  two hand-verified per-building "microsite" domains with real per-suite
-  tables — see the docstring for why this ISN'T a crawl), **Silverstein
-  Properties** (public, unauthenticated Directus CMS API — building-level
-  only, one row per building).
-- Researched and explicitly **rejected** as landlord targets: Tishman
-  Speyer, Boston Properties (BXP), Related Companies — all three publish
-  zero per-space availability data on their own domains (portfolio
-  marketing sites only, leasing routed through brokers/microsites).
-- **Dataset**: 790 rows / 682 available spaces / 202 buildings (133 with
-  current availability) / 9 landlords. 100% coordinate coverage. 100%
-  building-photo coverage (hotlinked; monogram fallback in UI for the
-  landlords with no logo file: Rudin, Vornado, Durst, ESRT, Brookfield,
-  RXR, Silverstein).
+- **Seventeen landlord scrapers** (each documents its site's architecture
+  in its docstring): GFP, Rudin, SL Green, Vornado, Durst, ESRT,
+  Brookfield Properties, RXR Realty, Silverstein Properties (all as of
+  the 2026-07-21 update above), plus this session's eight:
+  **Paramount Group** (public JSON API behind their React SPA, exact
+  per-suite floor/sqft), **Jack Resnick & Sons** (server-rendered, real
+  remarks text, Cloudflare-obfuscated emails decoded by hand),
+  **Sage Realty** (public WordPress REST API, embedded coords, filters
+  JLL/CBRE brokers out of a mixed contact list), **The Feil Organization**
+  (hidden admin-ajax JSON API with a rotating nonce, 13 NYC buildings),
+  **Two Trees Management** (real Nestio CRM feed, office only — no
+  structured retail data exists), **Time Equities** (server-rendered,
+  caught a real $/SF-vs-$/month unit-confusion bug before it reached the
+  dataset), **George Comfort & Sons** (single availabilities page —
+  caught a malformed-HTML parser bug AND a whole-page content-duplication
+  bug before trusting the output), **Brause Realty** (building-level only,
+  caught a real geocoding bug where a marketing name collided with an
+  unrelated real street name in a different borough).
+- Researched and explicitly **rejected** as landlord targets (real site,
+  confirmed no usable per-space data — not a scraping-difficulty issue):
+  Tishman Speyer, Boston Properties (BXP), Related Companies, Fisher
+  Brothers, Wharton Properties/Jeff Sutton, Savanna, Metro Loft,
+  Rockefeller Group, Extell, Hines, Beacon Capital Partners (contacts are
+  all CBRE/Cushman brokers — a hard-rule violation, not just low
+  volume), American Realty Advisors, Kaufman Organization (its one
+  working microsite's leasing contact is a Newmark broker), Slate
+  Property Group, Taconic Partners, Thor Equities, Jamestown, Muss
+  Development (its own "Availabilities" nav link points straight to
+  LoopNet), Normandy Real Estate Partners (defunct as an independent
+  landlord since a 2020 acquisition), Meadow Partners, Klein Enterprises
+  (a same-named but unrelated Baltimore-area firm), Columbia Property
+  Trust (investor-facing since going private in 2021, no leasing site).
+- **Environment note for future sessions**: this sandbox sits behind an
+  institutional network content filter (redirects to `filter.techloq.com`
+  or a Squid error page) that blocks a meaningful fraction of smaller/
+  newer real-estate domains somewhat unpredictably — confirmed
+  domain-specific (not a general outage) by always testing a known-good
+  control domain alongside the target. Landlords blocked this way and
+  never actually seen: L&L Holding, RFR Realty, Nightingale Properties,
+  Ashkenazy Acquisition, Trinity Real Estate, Cove Property Group, Global
+  Holdings, Olayan America, Vanbarton Group, William Macklowe Company.
+  These are **inconclusive, not rejected** — re-attempt from an unfiltered
+  network before concluding anything about their actual sites.
+- **Dataset**: 1123 rows / 1013 available spaces / 270 buildings / 17
+  landlords. 100% coordinate coverage. 100% building-photo coverage
+  (hotlinked; monogram fallback in UI for every landlord with no logo
+  file on hand — most of them; only GFP and SL Green have one).
 - **Matching engine** (`matching.py`): five signals (type .20, size .20,
   budget .15, geo .25, semantic .20) PLUS two small nudges — landlord
   style (+3, unchanged from before) and **fit-out condition** (+3, new:
@@ -145,7 +170,7 @@ via text embeddings; a from-scratch rent-estimation model. Live at
 
 | File | Role |
 |---|---|
-| `scrape_gfp.py` / `scrape_rudin.py` / `scrape_slgreen.py` / `scrape_vornado.py` / `scrape_durst.py` / `scrape_esrt.py` / `scrape_brookfield.py` / `scrape_rxr.py` / `scrape_silverstein.py` | one scraper per landlord → `*_listings.csv` |
+| `scrape_gfp.py` / `scrape_rudin.py` / `scrape_slgreen.py` / `scrape_vornado.py` / `scrape_durst.py` / `scrape_esrt.py` / `scrape_brookfield.py` / `scrape_rxr.py` / `scrape_silverstein.py` / `scrape_paramount.py` / `scrape_resnick.py` / `scrape_sage.py` / `scrape_feil.py` / `scrape_twotrees.py` / `scrape_timeequities.py` / `scrape_gcomfort.py` / `scrape_brause.py` | one scraper per landlord (17 total) → `*_listings.csv` |
 | `clean_dataset.py` | merge, rent parsing, fit-condition parsing, PLUTO enrichment, geocoding → `spaces_clean.csv`, `dataset_meta.json`, caches |
 | `matching.py` | 5-signal engine + geo-anchor pooling + fit-condition nudge + `count_spaces` + NaN guards + `LANDLORD_PROFILES`/`AREAS`/`SUBWAY_STATIONS` |
 | `landlord.py` | 3-signal landlord ranking (anchor-aware) |
@@ -227,18 +252,22 @@ first deploy (see §3) — fixed and reconfirmed live via direct curl to
 1. **Durable lead storage** — blocked on Gabriel creating Vercel
    Postgres/KV; then implement the write path + a small `/api/leads` GET
    for himself, keep log fallback, add tests.
-2. **Dispatch `embeddings.yml` manually** (or wait for Monday) so the 3
-   newest landlords' descriptions get real semantic-search vectors
-   instead of falling back to TF-IDF/neutral.
-3. **Landlord #10+** — Tishman Speyer/BXP/Related were researched and
-   ruled out (see §2); if more coverage is wanted, look at landlords
-   with their own leasing pages that weren't yet tried (e.g. Paramount
-   Group, L&L Holding, Fisher Brothers) — verify each by hand before
-   writing a scraper, same standard as this session's work.
-4. **Custom domain + Vercel Analytics** — dashboard actions (Gabriel).
-5. **Polish**: non-consecutive building grouping, ESRT retail typing,
+2. **Landlord #18+** — 38 candidates researched across this session and
+   the prior one; see §2 for the full rejected list (real sites, no
+   usable data) and the network-blocked list (inconclusive — retry from
+   an unfiltered network first). Remaining untried ideas worth a look:
+   The Klein Group (kleingroupcre.com — NOT the same as the
+   Baltimore-area "Klein Enterprises" already ruled out), Silverstein's
+   or Feil's still-uncovered secondary buildings, or any of the
+   network-blocked names above once reachable. Verify each by hand before
+   writing a scraper — same standard as this session's work — and expect
+   a real hit rate around 20-25% of candidates even when reachable; most
+   NYC landlords simply don't publish per-space data on their own domain.
+3. **Custom domain + Vercel Analytics** — dashboard actions (Gabriel).
+4. **Polish**: non-consecutive building grouping, ESRT retail typing,
    mobile/Lighthouse pass, per-suite descriptions for SLG, extend the
-   RXR microsite registry if more can be hand-verified live.
+   RXR microsite registry and Two Trees' retail coverage if more can be
+   hand-verified live.
 
 ## 9. Exact next step for Claude Code
 
@@ -247,12 +276,13 @@ Run the test suite to validate the environment:
 python -m pip install -r requirements.txt -r requirements-dev.txt
 python test_engine.py        # expect 33 passed
 ```
-Then check whether `embeddings.yml` has run since the landlord #7-9
-commit (item 2 above) — if not, either dispatch it manually
-(`gh workflow run embeddings.yml`) or wait for Monday. After that, item 1
-(durable leads) is blocked on Gabriel; item 3 (more landlords) is the
-best uncredentialed next step and follows the exact playbook this
-session used: research candidate sites for real per-space availability
-data BEFORE writing a scraper, verify with direct HTTP requests (not
-just WebFetch summaries) for anything address/image/contact-critical,
-and add a test for any new behavior rule.
+`embeddings.yml` auto-triggers on every push that touches `spaces_clean.csv`
+(confirmed directly — no manual dispatch needed, unlike what an earlier
+version of this note assumed). Item 1 (durable leads) is blocked on
+Gabriel; item 2 (more landlords) is the best uncredentialed next step —
+research candidate sites for real per-space availability data BEFORE
+writing a scraper, verify with direct HTTP requests (not just WebFetch
+summaries) for anything address/image/contact-critical, spot-check the
+scraper's OWN output (coordinates, floor numbers, rent units) rather than
+trusting a clean-looking recon report, and add a test for any new
+behavior rule.
