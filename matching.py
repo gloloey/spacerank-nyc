@@ -74,6 +74,7 @@ LANDLORD_PROFILES = {
     "Silverstein Properties":    "family-run",      # Silverstein family since 1957
     "Paramount Group":           "institutional",   # public REIT (NYSE: PGRE)
     "Jack Resnick & Sons":       "family-run",      # Resnick family, founded 1928
+    "The Feil Organization":     "family-run",      # Feil family, still family-led
     # RXR Realty is intentionally NOT classified: privately held (founded/led
     # by Scott Rechler), neither a public REIT nor a multi-generation family
     # firm in the Rudin/Durst/GFP/Silverstein sense — landlord_style stays

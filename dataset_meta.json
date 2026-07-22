@@ -1,9 +1,9 @@
 {
- "refreshed_at": "2026-07-22T19:13:21Z",
- "total_rows": 921,
- "available_spaces": 811,
- "buildings": 223,
- "buildings_with_availability": 152,
+ "refreshed_at": "2026-07-22T19:22:09Z",
+ "total_rows": 1015,
+ "available_spaces": 905,
+ "buildings": 236,
+ "buildings_with_availability": 165,
  "landlords": [
   "Brookfield Properties",
   "Empire State Realty Trust",
@@ -16,6 +16,7 @@
   "Sage Realty",
   "Silverstein Properties",
   "The Durst Organization",
+  "The Feil Organization",
   "Vornado Realty Trust"
  ],
  "per_landlord": {
@@ -62,6 +63,10 @@
   "The Durst Organization": {
    "rows": 72,
    "available": 72
+  },
+  "The Feil Organization": {
+   "rows": 94,
+   "available": 94
   },
   "Vornado Realty Trust": {
    "rows": 167,
