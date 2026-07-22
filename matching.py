@@ -72,6 +72,7 @@ LANDLORD_PROFILES = {
     "Empire State Realty Trust": "institutional",   # public REIT (NYSE: ESRT)
     "Brookfield Properties":     "institutional",   # part of Brookfield Asset Mgmt (NYSE: BN)
     "Silverstein Properties":    "family-run",      # Silverstein family since 1957
+    "Paramount Group":           "institutional",   # public REIT (NYSE: PGRE)
     # RXR Realty is intentionally NOT classified: privately held (founded/led
     # by Scott Rechler), neither a public REIT nor a multi-generation family
     # firm in the Rudin/Durst/GFP/Silverstein sense — landlord_style stays
