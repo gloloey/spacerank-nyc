@@ -127,8 +127,21 @@ def parse_property(slug):
         hood_m = re.search(r"\bin ([A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+){0,2})\b", description)
         address = f"{hood_m.group(1)}, New York, NY" if hood_m else "New York, NY"
 
-    img = soup.select_one("img[src*='wp-content/uploads']")
-    image_url = img.get("src", "") if img else ""
+    # BUG FIX (found by Gabriel — every building was showing the SAME
+    # picture): the naive first-match selector was grabbing the site's own
+    # logo, which is also hosted under wp-content/uploads and appears
+    # before any real building photo in the DOM. Skip anything logo-shaped
+    # (by src filename, alt text, or class) and take the first real
+    # "Gallery Image"-alt photo instead.
+    image_url = ""
+    for candidate in soup.select("img[src*='wp-content/uploads']"):
+        src = candidate.get("src", "")
+        alt = (candidate.get("alt") or "").lower()
+        classes = " ".join(candidate.get("class") or []).lower()
+        if "logo" in src.lower() or "logo" in alt or "logo" in classes:
+            continue
+        image_url = src
+        break
     if image_url.startswith("data:"):
         image_url = ""
 
