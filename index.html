@@ -635,7 +635,7 @@ function renderTypes() {
   $("typeseg").innerHTML = TYPES.map(([t, ic]) =>
     `<button type="button" data-t="${t}" class="${t === curType ? "on" : ""}">${ic}${t}</button>`).join("");
   $("typeseg").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-    curType = b.dataset.t; renderTypes(); refreshCount();
+    curType = b.dataset.t; renderTypes(); renderChips(); refreshCount();
   }));
 }
 
@@ -772,13 +772,39 @@ $("sizequick").querySelectorAll("button").forEach(b => b.addEventListener("click
 }));
 
 /* ---------------- vibe chips ------------------------------------------- */
-const SUGGESTIONS = [
-  "lots of natural light", "high ceilings", "exposed brick and loft feel",
-  "column-free open floor", "renovated modern lobby", "landmark Art Deco building",
-  "great views of the skyline", "outdoor terrace", "steps from major subway lines",
-  "attended lobby 24/7", "on-site parking", "fitness center and amenities",
-  "furnished and move-in ready", "strong street foot traffic", "quiet side street",
-];
+// Chips are suggested phrases for the free-text "vibe" box — matched by
+// MEANING against each listing's own description (see semantic.py), never
+// a structured filter. Retail gets its own set: frontage/foot-traffic/
+// ground-floor language genuinely shows up in retail listing descriptions
+// (spot-checked against spaces_clean.csv) but isn't a clean structured
+// column across enough rows to build a real filter field on — this is the
+// honest middle ground: real language, not an invented data field.
+const SUGGESTIONS_BY_TYPE = {
+  Office: [
+    "lots of natural light", "high ceilings", "exposed brick and loft feel",
+    "column-free open floor", "renovated modern lobby", "landmark Art Deco building",
+    "great views of the skyline", "outdoor terrace", "steps from major subway lines",
+    "attended lobby 24/7", "on-site parking", "fitness center and amenities",
+    "furnished and move-in ready", "quiet side street",
+  ],
+  Retail: [
+    "ground floor", "corner location", "wide street frontage", "high foot traffic",
+    "large storefront windows", "near subway entrance", "flagship location",
+    "outdoor seating allowed", "near luxury retail", "loading dock access",
+    "double-height ceilings", "renovated storefront",
+  ],
+  Showroom: [
+    "lots of natural light", "high ceilings", "column-free open floor",
+    "loading dock access", "renovated modern lobby", "furnished and move-in ready",
+    "near subway entrance", "quiet side street", "flexible open layout",
+  ],
+};
+const PLACEHOLDER_BY_TYPE = {
+  Office: "e.g. bright loft with exposed brick, strong foot traffic, near luxury retail…",
+  Retail: "e.g. corner storefront with high foot traffic, wide frontage, near the subway…",
+  Showroom: "e.g. column-free open floor with loading dock access, flexible layout…",
+};
+function currentSuggestions() { return SUGGESTIONS_BY_TYPE[curType] || SUGGESTIONS_BY_TYPE.Office; }
 function hasPhrase(p) { return $("q").value.toLowerCase().includes(p.toLowerCase()); }
 function addPhrase(p) {
   const cur = $("q").value.trim();
@@ -790,15 +816,17 @@ function removePhrase(p) {
     .replace(/^\s*,\s*/, "").replace(/,\s*,/g, ",").replace(/[,\s]+$/, "").trim();
 }
 function renderChips() {
-  $("chips").innerHTML = SUGGESTIONS.map((p, i) =>
+  const suggestions = currentSuggestions();
+  $("q").placeholder = PLACEHOLDER_BY_TYPE[curType] || PLACEHOLDER_BY_TYPE.Office;
+  $("chips").innerHTML = suggestions.map((p, i) =>
     `<button type="button" class="chip" id="chip${i}"><span>${esc(p)}</span><span class="x">✕</span></button>`).join("");
-  SUGGESTIONS.forEach((p, i) => $("chip" + i).addEventListener("click", e => {
+  suggestions.forEach((p, i) => $("chip" + i).addEventListener("click", e => {
     e.preventDefault();
     hasPhrase(p) ? removePhrase(p) : addPhrase(p);
     syncChips();
   }));
 }
-function syncChips() { SUGGESTIONS.forEach((p, i) => $("chip" + i).classList.toggle("on", hasPhrase(p))); }
+function syncChips() { currentSuggestions().forEach((p, i) => $("chip" + i).classList.toggle("on", hasPhrase(p))); }
 
 /* ---------------- personas --------------------------------------------- */
 const PERSONAS = [
@@ -817,7 +845,7 @@ $("personas").innerHTML = PERSONAS.map((p, i) =>
      <span><b>${p.name}</b><span>${p.desc}</span></span><span class="go">→</span></button>`).join("");
 $("personas").querySelectorAll(".persona").forEach(b => b.addEventListener("click", () => {
   const s = PERSONAS[+b.dataset.i].set;
-  curType = s.type; renderTypes();
+  curType = s.type; renderTypes(); renderChips();
   selectedAreas.clear(); (s.areas || []).forEach(k => selectedAreas.add(k));
   renderAreaPills(window.__groups || {});
   $("areahint").innerHTML = `<b>${selectedAreas.size}</b> area${selectedAreas.size > 1 ? "s" : ""} selected.`;
@@ -1014,7 +1042,7 @@ function readUrl() {
   const p = new URLSearchParams(location.search);
   const KEYS = ["type","smin","smax","budget","areas","alat","alng","style","term","fit","q"];
   if (![...p.keys()].some(k => KEYS.includes(k))) return false;
-  if (p.get("type")) { curType = p.get("type"); renderTypes(); }
+  if (p.get("type")) { curType = p.get("type"); renderTypes(); renderChips(); }
   $("smin").value = p.get("smin") || ""; $("smax").value = p.get("smax") || "";
   $("budget").value = p.get("budget") || "";
   selectedAreas.clear();
