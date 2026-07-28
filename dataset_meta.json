@@ -1,9 +1,9 @@
 {
- "refreshed_at": "2026-07-22T21:29:34Z",
- "total_rows": 1123,
- "available_spaces": 1013,
- "buildings": 270,
- "buildings_with_availability": 199,
+ "refreshed_at": "2026-07-28T14:00:32Z",
+ "total_rows": 1143,
+ "available_spaces": 1033,
+ "buildings": 290,
+ "buildings_with_availability": 219,
  "landlords": [
   "Brause Realty",
   "Brookfield Properties",
@@ -16,10 +16,12 @@
   "Rudin Management",
   "SL Green",
   "Sage Realty",
+  "Savanna",
   "Silverstein Properties",
   "The Durst Organization",
   "The Feil Organization",
   "Time Equities",
+  "Tishman Speyer",
   "Two Trees Management",
   "Vornado Realty Trust"
  ],
@@ -68,6 +70,10 @@
    "rows": 14,
    "available": 14
   },
+  "Savanna": {
+   "rows": 8,
+   "available": 8
+  },
   "Silverstein Properties": {
    "rows": 7,
    "available": 7
@@ -83,6 +89,10 @@
   "Time Equities": {
    "rows": 13,
    "available": 13
+  },
+  "Tishman Speyer": {
+   "rows": 12,
+   "available": 12
   },
   "Two Trees Management": {
    "rows": 19,

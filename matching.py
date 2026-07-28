@@ -78,10 +78,12 @@ LANDLORD_PROFILES = {
     "Two Trees Management":      "family-run",      # founded by David Walentas, CEO son Jed Walentas
     "George Comfort & Sons":     "family-run",      # Comfort family, still family-led
     "Brause Realty":             "family-run",      # Brause family (David, Roberta, Melissa Brause Rackoff)
-    # RXR Realty is intentionally NOT classified: privately held (founded/led
-    # by Scott Rechler), neither a public REIT nor a multi-generation family
-    # firm in the Rudin/Durst/GFP/Silverstein sense — landlord_style stays
-    # None rather than forcing it into either bucket.
+    "Tishman Speyer":            "family-run",      # co-founded by Robert Tishman & Jerry Speyer; CEO Rob Speyer is Jerry's son
+    # RXR Realty, Sage Realty, Time Equities, and Savanna are intentionally
+    # NOT classified: privately held but none has a citable public source
+    # pinning down either "public REIT" or a multi-generation family firm in
+    # the Rudin/Durst/GFP/Silverstein/Tishman-Speyer sense — landlord_style
+    # stays None rather than forcing them into either bucket.
 }
 STYLE_LABELS = {"institutional": "Institutional (public REIT)",
                 "family-run": "Family-run firm"}
