@@ -3,6 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Runs before <body> paints anything, so a dark-mode user never sees a
+   flash of the light theme while the rest of the page's CSS/JS loads.
+   The click handler that TOGGLES this later lives with the rest of the
+   app's JS at the bottom of the page — this is only the earliest-possible
+   read of the saved preference. */
+if (localStorage.getItem("sr_dark") === "1" ||
+    (localStorage.getItem("sr_dark") === null && matchMedia("(prefers-color-scheme: dark)").matches))
+  document.documentElement.classList.add("dark");
+</script>
 <title>SpaceRank NYC — find your space, meet your landlord</title>
 <meta name="description" content="Describe what you need — get NYC's best-fitting commercial spaces and the landlords behind them, ranked and explained.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -53,6 +63,18 @@ button { font-family:inherit; }
 .wrap { max-width:1180px; margin:0 auto; padding:0 22px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
 
+/* ============================== PROGRESS BAR =============================
+   A thin bar at the very top of the viewport for ANY network activity —
+   search, geocoding an address, sending a lead. Widens toward (never all
+   the way to) 90% while a request is in flight, then snaps to 100% and
+   fades once it actually lands. See progressStart()/progressDone() below. */
+.pageprogress {
+  position:fixed; top:0; left:0; height:3px; width:0%; z-index:2000;
+  background:linear-gradient(90deg, var(--teal), var(--blue));
+  box-shadow:0 0 9px color-mix(in srgb, var(--blue) 65%, transparent);
+  opacity:0; transition:width .3s ease-out, opacity .35s ease-out;
+}
+.pageprogress.on { opacity:1; }
 /* ============================== HEADER ================================== */
 .hdr {
   position:sticky; top:0; z-index:200; backdrop-filter:blur(14px);
@@ -77,13 +99,14 @@ button { font-family:inherit; }
   transition:transform .15s, box-shadow .15s;
 }
 .iconbtn:hover { transform:translateY(-1px); box-shadow:var(--shadow-1); }
+.iconbtn:active { transform:scale(.94); }
 .iconbtn .cnt { background:var(--blue); color:#fff; font-size:.68rem; min-width:17px; height:17px; border-radius:999px;
   display:inline-flex; align-items:center; justify-content:center; padding:0 4px; transition:background .2s, color .2s; }
 .iconbtn .cnt.zero { background:var(--card2); color:var(--ink-faint); }
 .iconbtn .cnt.bump { animation:pop2 .35s; }
 
 /* ============================== HERO ==================================== */
-.hero { padding:52px 0 8px; }
+.hero { padding:52px 0 8px; animation:rise .6s cubic-bezier(.2,.8,.2,1) both; }
 .hero h1 {
   font-family:var(--disp); font-weight:800; letter-spacing:-.035em; line-height:1.06;
   font-size:clamp(1.9rem, 4.6vw, 3.1rem); margin:0 0 10px; max-width:700px;
@@ -95,8 +118,21 @@ button { font-family:inherit; }
   text-align:left; border:1px solid var(--line); background:var(--card); border-radius:var(--r);
   padding:15px 16px; cursor:pointer; transition:transform .18s, box-shadow .18s, border-color .18s;
   display:flex; gap:12px; align-items:flex-start;
+  /* backwards, NOT both/forwards: this entrance animation and :hover both
+     touch `transform`. `backwards` keeps it invisible only *during* its
+     staggered animation-delay below, then hands transform back to the
+     normal cascade once done. `forwards`/`both` would instead keep
+     HOLDING transform:none at animation-origin priority forever — which
+     outranks a plain :hover rule, silently killing the hover-lift below
+     the moment the entrance animation finished. */
+  animation:rise .5s cubic-bezier(.2,.8,.25,1) backwards;
 }
+.persona:nth-child(1) { animation-delay:.05s }
+.persona:nth-child(2) { animation-delay:.11s }
+.persona:nth-child(3) { animation-delay:.17s }
+.persona:nth-child(4) { animation-delay:.23s }
 .persona:hover { transform:translateY(-3px); box-shadow:var(--shadow-2); border-color:var(--blue); }
+.persona:active { transform:translateY(-1px) scale(.98); }
 .persona .ico { font-size:1.35rem; line-height:1; margin-top:2px; }
 .persona b { display:block; font-size:.92rem; margin-bottom:2px; }
 .persona span { font-size:.78rem; color:var(--ink-soft); display:block; line-height:1.4; }
@@ -142,6 +178,7 @@ button { font-family:inherit; }
 }
 .pill:hover { border-color:var(--blue); color:var(--ink); transform:translateY(-1px); }
 .pill.on { background:var(--blue); border-color:var(--blue); color:#fff; font-weight:600; }
+.pill:active { transform:scale(.95); }
 
 /* inputs */
 .frow { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
@@ -212,6 +249,7 @@ button { font-family:inherit; }
   border-radius:999px; padding:5px 11px; font-size:.75rem; cursor:pointer; transition:all .13s; }
 .chip:hover { border-color:var(--blue); color:var(--blue); }
 .chip.on { border-style:solid; background:var(--teal-soft); border-color:var(--teal); color:var(--teal); font-weight:600; }
+.chip:active { transform:scale(.95); }
 .chip .x { display:none; font-size:.65rem; } .chip.on .x { display:inline; }
 
 /* -------- live count + search button -------- */
@@ -227,9 +265,15 @@ button { font-family:inherit; }
   transition:transform .15s, box-shadow .15s, filter .15s; box-shadow:0 6px 18px color-mix(in srgb, var(--blue) 35%, transparent);
 }
 .gobtn:hover { transform:translateY(-1px); filter:brightness(1.07); }
-.gobtn:active { transform:translateY(0); }
+.gobtn:active { transform:translateY(0) scale(.985); }
 .gobtn[disabled] { opacity:.6; cursor:wait; transform:none; }
 .gobtn .gcnt { font-variant-numeric:tabular-nums; }
+.gospin {
+  width:14px; height:14px; margin-right:8px; vertical-align:-2.5px; display:inline-block;
+  border:2.5px solid rgba(255,255,255,.35); border-top-color:#fff; border-radius:50%;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
 .dockfoot { font-size:.68rem; color:var(--ink-faint); text-align:center; margin-top:7px; }
 /* ============================== RESULTS ================================= */
 .results { min-height:400px; }
@@ -253,7 +297,7 @@ button { font-family:inherit; }
 /* building card */
 .bcard {
   background:var(--card); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow-1);
-  margin-bottom:14px; opacity:0; transform:translateY(10px); animation:rise .45s cubic-bezier(.2,.8,.25,1) forwards;
+  margin-bottom:14px; animation:rise .45s cubic-bezier(.2,.8,.25,1) both;
   transition:box-shadow .2s, transform .2s;
 }
 /* overflow used to be hidden (it clipped the hover tooltips); round the
@@ -266,10 +310,18 @@ button { font-family:inherit; }
   0%   { box-shadow:0 0 0 3px var(--blue), var(--shadow-2); }
   100% { box-shadow:var(--shadow-1); }
 }
-@keyframes rise { to { opacity:1; transform:none; } }
+/* from+to (not a static opacity:0 on the class itself) so that when
+   prefers-reduced-motion forces animation:none, the element falls back to
+   its normal opacity:1/transform:none instead of getting stuck invisible —
+   a static "opacity:0; animation:...forwards" pairing would go permanently
+   blank the instant the animation is disabled, since nothing would ever
+   set opacity back to 1. animation:...both keeps it invisible only
+   *during* animation-delay (staggered cards) and holds the visible end
+   state after — but only while the animation itself is actually running. */
+@keyframes rise { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
 .bmain { display:flex; gap:16px; padding:16px 18px 12px; }
 .thumbwrap { position:relative; flex:0 0 118px; }
-.thumb { width:118px; height:96px; border-radius:12px; object-fit:cover; display:block; background:var(--bg2); }
+.thumb { width:118px; height:96px; border-radius:12px; object-fit:cover; display:block; background:var(--bg2); transition:opacity .4s ease; }
 .thumb.mono { display:flex; align-items:center; justify-content:center; font-family:var(--disp); font-weight:800; font-size:1.3rem; color:var(--ink-faint); }
 .rankn { position:absolute; top:-7px; left:-7px; background:var(--ink); color:var(--bg); font-size:.68rem; font-weight:800; width:22px; height:22px; border-radius:8px; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-1); }
 .binfo { flex:1; min-width:0; }
@@ -283,7 +335,17 @@ button { font-family:inherit; }
 /* score ring */
 .ring { flex:0 0 62px; margin-left:auto; position:relative; width:62px; height:62px; }
 .ring svg { transform:rotate(-90deg); }
-.ring .trk { stroke:var(--line2); } .ring .val { transition:stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1); stroke-linecap:round; }
+.ring .trk { stroke:var(--line2); }
+/* animation, not transition — every ring is a BRAND NEW element each time a
+   card renders (innerHTML swap, not an attribute update on a persisting
+   element), and a CSS transition only plays when an existing element's
+   computed style changes; it never plays on first paint. An animation
+   does, the same way .bar b below draws itself in with `grow`. 163.4 is
+   the ring's fixed circumference (2*pi*26, same R the JS uses) — the
+   real per-score end value is whatever stroke-dashoffset is already set
+   to inline, which this one-sided keyframe leaves alone. */
+.ring .val { stroke-linecap:round; animation:ringfill 1s cubic-bezier(.2,.8,.2,1); }
+@keyframes ringfill { from { stroke-dashoffset:163.4; } }
 .ring .txt { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
 .ring .txt b { font-size:.98rem; font-variant-numeric:tabular-nums; letter-spacing:-.02em; line-height:1; }
 .ring .txt span { font-size:.55rem; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
@@ -332,9 +394,11 @@ button { font-family:inherit; }
 .abtn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
 .abtn.primary:hover { color:#fff; filter:brightness(1.08); }
 .abtn.on { background:var(--blue); border-color:var(--blue); color:#fff; }
+.abtn:active { transform:scale(.96); }
 .fav { border:1px solid var(--line); background:var(--card); width:31px; height:31px; border-radius:50%; cursor:pointer; font-size:.85rem; color:var(--ink-faint); display:inline-flex; align-items:center; justify-content:center; transition:all .15s; }
 .fav:hover { transform:scale(1.12); border-color:var(--danger); color:var(--danger); }
 .fav.on { background:var(--danger-soft); border-color:var(--danger); color:var(--danger); animation:pop2 .3s; }
+.fav:active { transform:scale(.92); }
 @keyframes pop2 { 50% { transform:scale(1.3); } }
 
 .schip { font-size:.68rem; font-weight:700; padding:1.5px 8px; border-radius:999px; font-variant-numeric:tabular-nums; }
@@ -356,7 +420,7 @@ button { font-family:inherit; }
 .showmore:hover { border-color:var(--blue); background:var(--blue-soft); }
 /* ============================== LANDLORDS =============================== */
 .llgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; margin-top:6px; }
-.llcard { background:var(--card); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow-1); padding:17px 18px; opacity:0; transform:translateY(10px); animation:rise .45s .1s cubic-bezier(.2,.8,.25,1) forwards; }
+.llcard { background:var(--card); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow-1); padding:17px 18px; animation:rise .45s .1s cubic-bezier(.2,.8,.25,1) both; }
 .llhead { display:flex; align-items:center; gap:9px; margin-bottom:11px; flex-wrap:wrap; }
 .lltag { font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); background:var(--card2); border:1px solid var(--line2); padding:3px 9px; border-radius:999px; }
 .lltag.match { background:var(--teal-soft); border-color:var(--teal); color:var(--teal); }
@@ -444,7 +508,7 @@ button { font-family:inherit; }
 .drawer h3 .x { margin-left:auto; cursor:pointer; border:none; background:none; font-size:1rem; color:var(--ink-faint); }
 .drawer .body { flex:1; overflow:auto; padding:14px 20px; }
 .favrow { display:flex; gap:11px; align-items:center; border:1px solid var(--line); border-radius:var(--r-sm); padding:10px 12px; margin-bottom:9px; }
-.favrow img, .favrow .mono2 { width:52px; height:44px; border-radius:8px; object-fit:cover; background:var(--bg2); }
+.favrow img, .favrow .mono2 { width:52px; height:44px; border-radius:8px; object-fit:cover; background:var(--bg2); transition:opacity .4s ease; }
 .favrow .mono2 { display:flex; align-items:center; justify-content:center; font-weight:800; color:var(--ink-faint); font-size:.8rem; }
 .favrow .fi { flex:1; min-width:0; } .favrow .fi b { font-size:.83rem; display:block; }
 .favrow .fi span { font-size:.7rem; color:var(--ink-soft); }
@@ -487,6 +551,8 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
 </head>
 <body>
 
+<div class="pageprogress" id="pageprogress" role="progressbar" aria-hidden="true"></div>
+
 <header class="hdr"><div class="wrap hdr-in">
   <a class="brand" href="/">Space<b>Rank</b> NYC</a>
   <span class="freshchip" id="freshchip" hidden><span class="dot"></span><span id="freshtxt"></span></span>
@@ -512,7 +578,13 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
       </div>
       <div class="step">
         <h3><span class="n">2</span> Where? <span class="opt">pick any number</span></h3>
-        <div id="areapills"></div>
+        <div id="areapills"><div class="pills">
+          <span class="sk" style="display:inline-block;width:88px;height:27px;border-radius:999px"></span>
+          <span class="sk" style="display:inline-block;width:112px;height:27px;border-radius:999px"></span>
+          <span class="sk" style="display:inline-block;width:74px;height:27px;border-radius:999px"></span>
+          <span class="sk" style="display:inline-block;width:96px;height:27px;border-radius:999px"></span>
+          <span class="sk" style="display:inline-block;width:64px;height:27px;border-radius:999px"></span>
+        </div></div>
         <p class="hint" id="areahint">No areas selected — searching all of NYC.</p>
         <div class="glabel" style="margin-top:14px">Or near a specific place
           <span class="tip" data-t="Anchor on a subway station or any address — like another office you already have. This ADDS to the areas above rather than replacing them: a space counts as close if it's near ANY of your areas OR this point.">?</span>
@@ -560,7 +632,10 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
     <div class="searchdock"><div class="dock">
       <div class="meter"><span><b id="livecnt">—</b> <span id="livelbl">spaces fit so far</span></span><span id="livepct"></span></div>
       <div class="meterbar"><i id="livebar"></i></div>
-      <button class="gobtn" id="go" type="button">Search <span class="gcnt" id="gocnt"></span></button>
+      <button class="gobtn" id="go" type="button">
+        <span id="goidle">Search <span class="gcnt" id="gocnt"></span></span>
+        <span id="gobusy" hidden><span class="gospin" aria-hidden="true"></span>Searching…</span>
+      </button>
       <div class="dockfoot">Every listing gets ranked — the count is how many pass your hard filters.</div>
     </div></div>
   </aside>
@@ -696,10 +771,9 @@ function llchip(name) {
   return `<span class="mchip ll" title="${esc(name)}">${inner}${esc(name)}</span>`;
 }
 
-/* ---------------- dark mode ------------------------------------------- */
-if (localStorage.getItem("sr_dark") === "1" ||
-    (localStorage.getItem("sr_dark") === null && matchMedia("(prefers-color-scheme: dark)").matches))
-  document.documentElement.classList.add("dark");
+/* ---------------- dark mode ---------------------------------------------
+   The initial class-on-<html> detection runs in <head> (see top of file)
+   so it happens before first paint — this just wires up the toggle. */
 $("darkbtn").addEventListener("click", () => {
   const on = document.documentElement.classList.toggle("dark");
   localStorage.setItem("sr_dark", on ? "1" : "0");
@@ -815,13 +889,14 @@ async function selectAnchorItem(i) {
   if (!it) return;
   if (it.type === "station") { setAnchor({ label: it.label, lat: it.lat, lng: it.lng }); return; }
   $("anchorq").disabled = true;
+  progressStart();
   try {
     const r = await fetch("/api/geocode?" + new URLSearchParams({ q: it.label }));
     const d = await r.json();
     if (d.found) setAnchor({ label: d.label, lat: d.lat, lng: d.lng });
     else toast(`Couldn't find "${it.label}" — try a fuller street address`);
   } catch (e) { toast("Couldn't reach the geocoder — try again"); }
-  finally { $("anchorq").disabled = false; hideAnchorDrop(); }
+  finally { $("anchorq").disabled = false; hideAnchorDrop(); progressDone(); }
 }
 $("anchorq").addEventListener("input", () => {
   const q = $("anchorq").value.trim();
@@ -1021,6 +1096,7 @@ function animateCount(el, target) {
 ["smin", "smax", "budget"].forEach(id => $(id).addEventListener("input", refreshCount));
 
 /* ---------------- boot: /api/areas ------------------------------------- */
+progressStart();
 fetch("/api/areas").then(r => r.json()).then(d => {
   window.__groups = d.groups || {};
   renderAreaPills(window.__groups);
@@ -1057,7 +1133,8 @@ fetch("/api/areas").then(r => r.json()).then(d => {
     $("resultsbox").scrollIntoView({ behavior: "smooth", block: "start" });
   }
   refreshCount();
-}).catch(() => { $("backend").textContent = "Could not reach the server — refresh to retry."; });
+}).catch(() => { $("backend").textContent = "Could not reach the server — refresh to retry."; })
+  .finally(progressDone);
 
 renderTypes(); renderChips();
 $("q").addEventListener("input", syncChips);
@@ -1070,6 +1147,38 @@ document.addEventListener("keydown", e => {
 /* ---------------- back to top ------------------------------------------ */
 addEventListener("scroll", () => $("topbtn").classList.toggle("show", scrollY > 700), { passive: true });
 $("topbtn").addEventListener("click", () => scrollTo({ top: 0, behavior: "smooth" }));
+
+/* ---------------- top-of-page progress bar ------------------------------
+   Classic "creeping" progress bar: jump to 20% the instant something
+   starts (so a click always gets INSTANT feedback, before any response
+   could possibly have arrived), then creep toward 90% in ever-smaller
+   steps — it never promises 100% until the real response has actually
+   landed. progressDone() then snaps it the rest of the way and fades it.
+   _progDepth is a counter, not a boolean, because calls can nest: e.g. the
+   boot fetch triggers doSearch() (from a shared search URL) before the
+   boot fetch's own "done" has fired — without a counter the outer call's
+   completion would hide the bar while the inner search is still running. */
+let _progDepth = 0, _progPct = 0, _progTimer = null;
+function progressStart() {
+  _progDepth++;
+  if (_progDepth > 1) return;
+  const bar = $("pageprogress");
+  _progPct = 0; bar.style.width = "0%"; bar.classList.add("on");
+  requestAnimationFrame(() => { _progPct = 20; bar.style.width = "20%"; });
+  clearInterval(_progTimer);
+  _progTimer = setInterval(() => {
+    _progPct += (90 - _progPct) * 0.1;
+    bar.style.width = _progPct.toFixed(1) + "%";
+  }, 280);
+}
+function progressDone() {
+  _progDepth = Math.max(0, _progDepth - 1);
+  if (_progDepth > 0) return;
+  clearInterval(_progTimer);
+  const bar = $("pageprogress");
+  bar.style.width = "100%";
+  setTimeout(() => { bar.classList.remove("on"); bar.style.width = "0%"; }, 380);
+}
 
 /* ---------------- toasts ----------------------------------------------- */
 function toast(msg) {
@@ -1115,7 +1224,8 @@ function renderFavs() {
   $("favlist").innerHTML = ks.length ? ks.map(k => {
     const f = favs[k];
     return `<div class="favrow">
-      ${f.image ? `<img src="${f.image}" alt="" onerror="this.outerHTML='<div class=mono2>${monogram(f.building)}</div>'">`
+      ${f.image ? `<img src="${f.image}" alt="" style="opacity:0" onload="this.style.opacity=1"
+                    onerror="this.outerHTML='<div class=mono2>${monogram(f.building)}</div>'">`
                 : `<div class="mono2">${monogram(f.building)}</div>`}
       <div class="fi"><b>${esc(f.building)}</b><span>${esc(f.landlord)} · scored ${f.score}</span></div>
       ${f.url ? `<a href="${f.url}" target="_blank" rel="noopener" style="font-size:.72rem">listing ↗</a>` : ""}
@@ -1215,7 +1325,9 @@ const PAGE = 10;
 
 async function doSearch() {
   writeUrl();
+  progressStart();
   $("go").disabled = true;
+  $("goidle").hidden = true; $("gobusy").hidden = false;
   $("rtool").hidden = true; $("llsec").hidden = true;
   $("spaces").innerHTML = SKELETON.repeat(3);
   $("landlords").innerHTML = ""; $("showmore").style.display = "none";
@@ -1255,6 +1367,8 @@ async function doSearch() {
   } finally {
     clearTimeout(timer);
     $("go").disabled = false;
+    $("goidle").hidden = false; $("gobusy").hidden = true;
+    progressDone();
   }
 }
 $("go").addEventListener("click", doSearch);
@@ -1376,7 +1490,8 @@ function groupCard(g, i) {
     ? `${esc(top.contact.split("<")[0].trim())} — <a href="${mailtoHref(mail[1], g)}">${mail[1]}</a>`
     : `${esc(top.contact)}`;
   const photo = top.image
-    ? `<img class="thumb" src="${top.image}" alt="${esc(g.building)}" loading="lazy"
+    ? `<img class="thumb" src="${top.image}" alt="${esc(g.building)}" loading="lazy" style="opacity:0"
+         onload="this.style.opacity=1"
          onerror="this.outerHTML='<div class=&quot;thumb mono&quot;>${monogram(g.building)}</div>'">`
     : `<div class="thumb mono">${monogram(g.building)}</div>`;
   const first = g.spaces.slice(0, 3), rest = g.spaces.slice(3);
@@ -1904,6 +2019,7 @@ async function sendLead() {
   flag("ld_email", "e_email", !/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email), "That doesn't look like a valid email.");
   if (!ok) return;
   $("leadsend").disabled = true; $("leaderr").style.display = "none";
+  progressStart();
   try {
     const r = await fetch("/api/leads", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -1928,7 +2044,7 @@ async function sendLead() {
     $("leaderr").textContent = "⚠ Couldn't send the request (" + (err.message || "network error") +
       ") — please try again" + (leadCtx.email ? ` or email ${leadCtx.email} directly.` : ".");
     $("leaderr").style.display = "block";
-  } finally { $("leadsend").disabled = false; }
+  } finally { $("leadsend").disabled = false; progressDone(); }
 }
 </script>
 </body>
