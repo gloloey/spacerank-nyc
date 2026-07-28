@@ -17,9 +17,9 @@ rusty Python) as a portfolio project for interviews.
    Prefer simple, from-scratch, heavily-commented code over clever
    dependencies (the semantic fallback is hand-written TF-IDF; the price
    model is closed-form ridge in numpy — keep that spirit).
-2. **Never fake data.** Unknown values score neutral (0.5), display as
-   "—"/"n/a" with an explanation — never as an invented number. Rent
-   estimates are clearly marked, range-only, and NEVER affect ranking,
+2. **Honest-data design principle.** Unknown values score neutral (0.5),
+   display as "—"/"n/a" with an explanation — never as an invented number.
+   Rent estimates are clearly marked, range-only, and never affect ranking,
    filtering, or counts (tests enforce this).
 3. **Scrape politely, owner sites only.** Honest User-Agent, rate limits,
    ownership-side leasing contacts only — never brokers. The scraped
