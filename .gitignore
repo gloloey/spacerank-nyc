@@ -7,6 +7,9 @@ __pycache__/
 HANDOFF.md
 INTERVIEW_PREP.md
 
+# Local-only landlord research (not part of the scrape pipeline / public dataset)
+research/
+
 # Local data not needed by CI/deploy (23 MB PLUTO source; pluto_cache.json is committed instead)
 manhattan_pluto.csv
 
