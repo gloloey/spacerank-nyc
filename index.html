@@ -378,6 +378,19 @@ button { font-family:inherit; }
 }
 .maplegend .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
 .maplegend .sep { border-top:1px solid var(--line2); margin:3px 0; }
+.topjump {
+  position:absolute; right:12px; top:12px; z-index:450; background:var(--card); max-width:230px;
+  border:1px solid var(--line); border-radius:10px; padding:9px 10px; box-shadow:var(--shadow-2); font-size:.74rem;
+}
+.topjump .hd { font-weight:700; color:var(--ink); margin-bottom:4px; }
+.topjump button {
+  display:flex; align-items:center; gap:7px; width:100%; text-align:left; border:none; background:transparent;
+  padding:5px 5px; border-radius:7px; cursor:pointer; font:inherit; color:var(--ink-soft); pointer-events:auto;
+}
+.topjump button:hover { background:var(--card2); color:var(--ink); }
+.topjump .rk { font-weight:800; color:var(--ink); min-width:20px; }
+.topjump .bname { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.topjump b { color:var(--ink); font-weight:600; }
 .mapnote { font-size:.72rem; color:var(--ink-faint); margin:-8px 0 16px; display:none; }
 
 /* ============================== EMPTY / ERROR =========================== */
@@ -529,6 +542,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
     </div>
     <div class="mapbox" id="bigmap">
       <div id="mapcanvas"></div>
+      <div class="topjump" id="topjump"></div>
       <div class="maplegend">
         <div><span class="dot" style="background:#0d9f8a"></span>Strong match (75+)</div>
         <div><span class="dot" style="background:#2456e6"></span>Good match (55–74)</div>
@@ -1528,8 +1542,35 @@ function renderGoogleMarkers(clusters) {
     }
   });
 }
+/* Some pins can NEVER visually separate no matter the zoom — two listings
+   at the exact same real-world address (spot-checked: e.g. Durst's "Sven"
+   retail floors and "114 West 47" office floors are genuinely the same
+   building, just two named listings) will always sit on top of each
+   other. Rather than chase that with an ever-shrinking cluster radius,
+   give a direct way to jump straight to your best matches — no need to
+   guess where on the map to start zooming. */
+function renderTopJump() {
+  const top = mapPts.slice(0, 3);
+  if (!top.length) { $("topjump").innerHTML = ""; return; }
+  $("topjump").innerHTML = `<div class="hd">Jump to your top matches</div>` + top.map(({ g, idx }) => {
+    const r = g.spaces[0];
+    return `<button type="button" onclick="locateOnMap(${idx})">
+      <span class="rk">#${idx + 1}</span><span class="bname"><b>${esc(g.building)}</b> · ${r.score}</span></button>`;
+  }).join("");
+}
+function locateOnMap(idx) {
+  const g = allGroups[idx]; if (!g) return;
+  const r = g.spaces[0];
+  if (r.lat == null || r.lng == null) { toast("No coordinates for this building"); return; }
+  setView("map");
+  requestAnimationFrame(() => {
+    if (gmap) { gmap.panTo({ lat: r.lat, lng: r.lng }); gmap.setZoom(17); }
+    else if (map) map.setView([r.lat, r.lng], 17, { animate: true });
+  });
+}
 function drawMap(groups) {
   mapPts = groups.map((g, idx) => ({ g, idx })).filter(o => o.g.spaces[0].lat && o.g.spaces[0].lng);
+  renderTopJump();
   if (GMAPS_KEY) return drawGoogleMap();
   $("mapnote").textContent = "Zoom in to see subway stations, parks and landmarks. (Paste a Google Maps key in the code to switch to Google Maps — one marked constant.)";
   if (!map) {
