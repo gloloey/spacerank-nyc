@@ -78,7 +78,9 @@ button { font-family:inherit; }
 }
 .iconbtn:hover { transform:translateY(-1px); box-shadow:var(--shadow-1); }
 .iconbtn .cnt { background:var(--blue); color:#fff; font-size:.68rem; min-width:17px; height:17px; border-radius:999px;
-  display:inline-flex; align-items:center; justify-content:center; padding:0 4px; }
+  display:inline-flex; align-items:center; justify-content:center; padding:0 4px; transition:background .2s, color .2s; }
+.iconbtn .cnt.zero { background:var(--card2); color:var(--ink-faint); }
+.iconbtn .cnt.bump { animation:pop2 .35s; }
 
 /* ============================== HERO ==================================== */
 .hero { padding:52px 0 8px; }
@@ -194,6 +196,8 @@ button { font-family:inherit; }
 .anchorchip button:hover { background:color-mix(in srgb, var(--teal) 22%, transparent); }
 .mchip.anchor { background:var(--teal-soft); color:var(--teal); border-color:var(--teal); }
 .mchip.fit { background:var(--blue-soft); color:var(--blue-ink); }
+.mchip.style { background:var(--card); color:var(--ink-soft); font-weight:600; }
+.mchip.strong { color:var(--ink); font-weight:700; background:var(--card); border-color:var(--line); }
 
 /* vibe chips */
 .chips { display:flex; flex-wrap:wrap; gap:7px; margin-top:9px; }
@@ -250,6 +254,11 @@ button { font-family:inherit; }
 .bcard > :last-child { border-radius:0 0 var(--r) var(--r); }
 .bcard .why { margin:0; }
 .bcard:hover { box-shadow:var(--shadow-2); }
+.bcard.flash { animation: cardflash 1.6s ease-out; }
+@keyframes cardflash {
+  0%   { box-shadow:0 0 0 3px var(--blue), var(--shadow-2); }
+  100% { box-shadow:var(--shadow-1); }
+}
 @keyframes rise { to { opacity:1; transform:none; } }
 .bmain { display:flex; gap:16px; padding:16px 18px 12px; }
 .thumbwrap { position:relative; flex:0 0 118px; }
@@ -361,6 +370,14 @@ button { font-family:inherit; }
 
 /* ============================== MAP ===================================== */
 .mapbox { display:none; height:520px; border-radius:var(--r); border:1px solid var(--line); overflow:hidden; box-shadow:var(--shadow-1); margin-bottom:16px; position:relative; z-index:1; }
+#mapcanvas { position:absolute; inset:0; }
+.maplegend {
+  position:absolute; left:12px; bottom:12px; z-index:450; background:var(--card);
+  border:1px solid var(--line); border-radius:10px; padding:9px 12px; box-shadow:var(--shadow-2);
+  font-size:.72rem; color:var(--ink-soft); line-height:1.9; pointer-events:none;
+}
+.maplegend .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
+.maplegend .sep { border-top:1px solid var(--line2); margin:3px 0; }
 .mapnote { font-size:.72rem; color:var(--ink-faint); margin:-8px 0 16px; display:none; }
 
 /* ============================== EMPTY / ERROR =========================== */
@@ -510,7 +527,16 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
         <button data-v="map">◎ Map</button>
       </div>
     </div>
-    <div class="mapbox" id="bigmap"></div>
+    <div class="mapbox" id="bigmap">
+      <div id="mapcanvas"></div>
+      <div class="maplegend">
+        <div><span class="dot" style="background:#0d9f8a"></span>Strong match (75+)</div>
+        <div><span class="dot" style="background:#2456e6"></span>Good match (55–74)</div>
+        <div><span class="dot" style="background:#e08700"></span>Lower match (&lt;55)</div>
+        <div class="sep"></div>
+        <div>📍 your search anchor</div>
+      </div>
+    </div>
     <p class="mapnote" id="mapnote"></p>
     <div id="spaces">
       <div class="welcome">
@@ -839,6 +865,9 @@ const PERSONAS = [
   { ico:"⚖️", name:"Boutique law firm", desc:"Prestige on a budget near the big stations",
     set:{ type:"Office", areas:["grand central & murray hill", "penn district & garment"], smin:2000, smax:6000, budget:55,
           q:"professional pre-war building with renovated lobby and attended entrance near Grand Central" } },
+  { ico:"🏬", name:"Flagship retail storefront", desc:"Ground floor, high foot traffic, near transit",
+    set:{ type:"Retail", areas:["chelsea & meatpacking", "flatiron & union square"], smin:1500, smax:6000, budget:150,
+          q:"ground floor corner location with wide street frontage and high foot traffic, near the subway" } },
 ];
 $("personas").innerHTML = PERSONAS.map((p, i) =>
   `<button class="persona" data-i="${i}"><span class="ico">${p.ico}</span>
@@ -982,7 +1011,10 @@ try { favs = JSON.parse(localStorage.getItem("sr_favs") || "{}"); } catch (e) { 
 function favKey(g) { return g.landlord + "|" + g.building; }
 function saveFavs() {
   localStorage.setItem("sr_favs", JSON.stringify(favs));
-  $("favcnt").textContent = Object.keys(favs).length;
+  const n = Object.keys(favs).length, cnt = $("favcnt");
+  cnt.textContent = n;
+  cnt.classList.toggle("zero", n === 0);
+  cnt.classList.remove("bump"); void cnt.offsetWidth; cnt.classList.add("bump");
   renderFavs();
 }
 function removeFav(k) {
@@ -1015,6 +1047,7 @@ function renderFavs() {
   }).join("") : `<div class="empty" style="padding:24px"><div class="big">♡</div>Nothing saved yet.<br>Tap the heart on any building card.</div>`;
 }
 $("favcnt").textContent = Object.keys(favs).length;
+$("favcnt").classList.toggle("zero", Object.keys(favs).length === 0);
 renderFavs();
 $("favbtn").addEventListener("click", () => { $("drawer").classList.add("open"); $("drawerback").classList.add("open"); });
 $("drawerx").addEventListener("click", closeDrawer);
@@ -1172,7 +1205,7 @@ function signalBars(sig, top) {
   else cell("budget", Math.round(100 * sig.budget), "100% = the published rent is within your budget; drops off with the % over.");
   if (!used.geo) cell("area", 0, "You didn't pick any areas or a place to search near, so location isn't scored — all of NYC is fair game.", "—");
   else if (!geoKnown) cell("area", 0, "We couldn't verify this building's exact coordinates, so distance is scored neutrally rather than invented.", "n/a");
-  else cell("area", Math.round(100 * sig.geo), "How close the building is to the nearest of your chosen areas or your custom place. 100% = within half a kilometer.");
+  else cell("area", Math.round(100 * sig.geo), "How close the building is to the nearest of your chosen areas or your custom place. 100% = within 0.3 miles.");
   if (!used.vibe) cell("vibe", 0, "You didn't describe what you're looking for, so description-matching isn't scored. Try the suggestion chips!", "—");
   else cell("vibe", Math.round(100 * sig.semantic), "How similar the building's own description is to your words — matched by meaning (embeddings), not just keywords. 'Sunlit' finds 'excellent natural light'.");
   return `<div class="bars">` + cells.join("") + `</div>`;
@@ -1225,6 +1258,24 @@ function cleanReason(txt) {
   return out.charAt(0).toUpperCase() + out.slice(1);
 }
 
+/* Decision-relevant at a glance: size + price range across this building's
+   matching spaces, from KNOWN values only — never an invented/estimated
+   number (rent estimates are shown per-suite only, and never feed this). */
+function summaryChip(spaces) {
+  const sizes = spaces.map(s => s.size_sqft).filter(v => v != null && v === v);
+  const rents = spaces.map(s => s.rent_psf).filter(v => v != null && v === v);
+  const parts = [];
+  if (sizes.length) {
+    const lo = Math.min(...sizes), hi = Math.max(...sizes);
+    parts.push(lo === hi ? `${fmt(lo)} sf` : `${fmt(lo)}–${fmt(hi)} sf`);
+  }
+  if (rents.length) {
+    const lo = Math.round(Math.min(...rents)), hi = Math.round(Math.max(...rents));
+    parts.push(lo === hi ? `$${lo}/SF` : `$${lo}–${hi}/SF`);
+  }
+  if (!parts.length) return "";
+  return `<span class="mchip strong ttd" data-tt="Range across this building's matching space${spaces.length > 1 ? "s" : ""} — known published values only, never estimated.">${parts.join(" · ")}</span>`;
+}
 function groupCard(g, i) {
   const top = g.spaces[0];
   const mail = top.contact.match(/<(.+)>/);
@@ -1237,12 +1288,14 @@ function groupCard(g, i) {
     : `<div class="thumb mono">${monogram(g.building)}</div>`;
   const first = g.spaces.slice(0, 3), rest = g.spaces.slice(3);
   const k = favKey(g);
-  return `<div class="bcard" style="animation-delay:${Math.min(i % PAGE, 6) * 55}ms">
+  return `<div class="bcard" id="card-${i}" style="animation-delay:${Math.min(i % PAGE, 6) * 55}ms">
     <div class="bmain">
       <div class="thumbwrap">${photo}<span class="rankn">${i + 1}</span></div>
       <div class="binfo">
         <div class="brow1"><span class="bname">${esc(g.building)}</span></div>
         <div class="bmeta">${llchip(g.landlord)}
+          ${top.landlord_style ? `<span class="mchip style ttd" data-tt="Institutional = public REIT. Family-run = private family firm. A small tiebreaker in ranking, never a driver.">${top.landlord_style === "institutional" ? "Institutional" : "Family-run"}</span>` : ""}
+          ${summaryChip(g.spaces)}
           <span class="mchip">${g.spaces.length} matching space${g.spaces.length > 1 ? "s" : ""}</span>
           ${top.year_built ? `<span class="mchip">built ${top.year_built}</span>` : ""}
           <span class="mchip">${esc(top.borough)}</span>
@@ -1340,12 +1393,34 @@ function cartoUrl() {
 function restyleMapForTheme() { if (tileLayer) tileLayer.setUrl(cartoUrl()); }
 let mapPts = [];
 let anchorMarker = null, gAnchorMarker = null;
+/* Jump from a map pin's popup back to its full card in List view — scrolls
+   to it and flashes a highlight, so "which listing is this pin" is never a
+   guessing game. idx is the position in allGroups (the FULL ranked list,
+   same numbering as the card's rank badge), not the map-local pin count,
+   since some results without coordinates are skipped on the map but still
+   occupy a slot in allGroups. */
+function viewOnList(idx) {
+  setView("list");
+  while (shown <= idx && shown < allGroups.length) renderMore();
+  requestAnimationFrame(() => {
+    const el = document.getElementById("card-" + idx);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("flash");
+    setTimeout(() => el.classList.remove("flash"), 1600);
+  });
+}
+function popupHtml(g, idx, r) {
+  return `<div style="color:#1a2233"><b>${esc(g.building)}</b><br>${g.spaces.length} matching space${g.spaces.length > 1 ? "s" : ""} · top score ${r.score}<br>
+    <a href="${r.url}" target="_blank" rel="noopener">listing ↗</a> &nbsp;·&nbsp;
+    <a href="javascript:void(0)" onclick="viewOnList(${idx})">view details ↓</a></div>`;
+}
 function drawMap(groups) {
-  mapPts = groups.filter(g => g.spaces[0].lat && g.spaces[0].lng);
+  mapPts = groups.map((g, idx) => ({ g, idx })).filter(o => o.g.spaces[0].lat && o.g.spaces[0].lng);
   if (GMAPS_KEY) return drawGoogleMap();
   $("mapnote").textContent = "Zoom in to see subway stations, parks and landmarks. (Paste a Google Maps key in the code to switch to Google Maps — one marked constant.)";
   if (!map) {
-    map = L.map("bigmap", { scrollWheelZoom: true });
+    map = L.map("mapcanvas", { scrollWheelZoom: true });
     tileLayer = L.tileLayer(cartoUrl(), {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
       maxZoom: 20, subdomains: "abcd",
@@ -1353,15 +1428,14 @@ function drawMap(groups) {
     markerLayer = L.layerGroup().addTo(map);
   }
   markerLayer.clearLayers();
-  mapPts.forEach((g, i) => {
+  mapPts.forEach(({ g, idx }) => {
     const r = g.spaces[0];
     const col = r.score >= 75 ? "#0d9f8a" : r.score >= 55 ? "#2456e6" : "#e08700";
     const icon = L.divIcon({ className: "", iconSize: [30, 30],
       html: `<div style="background:${col};color:#fff;font-weight:700;border-radius:50%;width:30px;height:30px;
-        text-align:center;line-height:30px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.4);border:2px solid #fff">${i + 1}</div>` });
+        text-align:center;line-height:30px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.4);border:2px solid #fff">${idx + 1}</div>` });
     L.marker([r.lat, r.lng], { icon })
-      .bindPopup(`<div style="color:#1a2233"><b>${esc(g.building)}</b><br>${g.spaces.length} matching space(s) · top score ${r.score}<br>
-        <a href="${r.url}" target="_blank" rel="noopener">listing ↗</a></div>`)
+      .bindPopup(popupHtml(g, idx, r))
       .addTo(markerLayer);
   });
   if (anchorMarker) { map.removeLayer(anchorMarker); anchorMarker = null; }
@@ -1376,7 +1450,7 @@ function drawMap(groups) {
 }
 function fitMap() {
   if (!mapPts.length) return;
-  const bounds = mapPts.map(g => [g.spaces[0].lat, g.spaces[0].lng]);
+  const bounds = mapPts.map(({ g }) => [g.spaces[0].lat, g.spaces[0].lng]);
   if (anchor) bounds.push([anchor.lat, anchor.lng]);
   if (gmap) {
     const b = new google.maps.LatLngBounds();
@@ -1388,16 +1462,16 @@ function drawGoogleMap() {
   $("mapnote").textContent = "Google Maps — subway stations, transit lines and POIs courtesy of the transit layer.";
   const render = () => {
     if (!gmap) {
-      gmap = new google.maps.Map($("bigmap"), { center: { lat: 40.75, lng: -73.98 }, zoom: 13, mapTypeControl: false });
+      gmap = new google.maps.Map($("mapcanvas"), { center: { lat: 40.75, lng: -73.98 }, zoom: 13, mapTypeControl: false });
       new google.maps.TransitLayer().setMap(gmap);
     }
     gMarkers.forEach(m => m.setMap(null)); gMarkers = [];
     const info = new google.maps.InfoWindow();
-    mapPts.forEach((g, i) => {
+    mapPts.forEach(({ g, idx }) => {
       const r = g.spaces[0];
-      const m = new google.maps.Marker({ position: { lat: r.lat, lng: r.lng }, map: gmap, label: { text: String(i + 1), color: "#fff", fontWeight: "700" } });
+      const m = new google.maps.Marker({ position: { lat: r.lat, lng: r.lng }, map: gmap, label: { text: String(idx + 1), color: "#fff", fontWeight: "700" } });
       m.addListener("click", () => {
-        info.setContent(`<div style="color:#1a2233"><b>${esc(g.building)}</b><br>${g.spaces.length} matching space(s) · top score ${r.score}<br><a href="${r.url}" target="_blank" rel="noopener">listing ↗</a></div>`);
+        info.setContent(popupHtml(g, idx, r));
         info.open(gmap, m);
       });
       gMarkers.push(m);
