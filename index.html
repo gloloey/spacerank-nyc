@@ -24,11 +24,11 @@ if (localStorage.getItem("sr_dark") === "1" ||
 /* ============================== TOKENS ================================== */
 :root {
   --bg:#f3f5fa; --bg2:#e9edf6; --card:#ffffff; --card2:#f8fafd;
-  --ink:#0b1324; --ink-soft:#5a6478; --ink-faint:#8b94a8;
+  --ink:#0b1324; --ink-soft:#5a6478; --ink-faint:#686f7e;
   --line:#e2e7f1; --line2:#eef1f8;
-  --blue:#2456e6; --blue-soft:#e8eeff; --blue-ink:#16337f;
-  --teal:#0d9f8a; --teal-soft:#e2f6f3;
-  --amber:#e08700; --amber-soft:#fdf2df;
+  --blue:#2456e6; --blue-soft:#e8eeff; --blue-ink:#16337f; --blue-solid:#2456e6;
+  --teal:#0d9f8a; --teal-soft:#e2f6f3; --teal-ink:#085f53;
+  --amber:#e08700; --amber-soft:#fdf2df; --amber-ink:#865100;
   --danger:#dd3d43; --danger-soft:#fdecec;
   --shadow-1:0 1px 2px rgba(11,19,36,.05), 0 4px 16px rgba(11,19,36,.06);
   --shadow-2:0 2px 6px rgba(11,19,36,.08), 0 14px 40px rgba(11,19,36,.12);
@@ -37,11 +37,23 @@ if (localStorage.getItem("sr_dark") === "1" ||
 }
 html.dark {
   --bg:#0a0f1d; --bg2:#0e1526; --card:#121a2f; --card2:#182440;
-  --ink:#edf1fa; --ink-soft:#9aa5bc; --ink-faint:#6b7690;
+  --ink:#edf1fa; --ink-soft:#9aa5bc; --ink-faint:#9098ac;
   --line:#20294a; --line2:#1a2340;
-  --blue:#6b93ff; --blue-soft:#1a2857; --blue-ink:#c5d4ff;
-  --teal:#2fd4bc; --teal-soft:#0e2f2b;
-  --amber:#ffb84d; --amber-soft:#33260e;
+  /* --blue stays a light, legible-on-dark-backgrounds tone for TEXT/links
+     (checked: 5.9:1 against --card). But solid button fills put WHITE
+     text ON TOP of --blue — a light blue behind white text only manages
+     ~2.9:1 there, failing WCAG AA. --blue-solid is a separate, darker
+     token just for that job (verified 5.9:1 with white text); text/link
+     uses keep --blue untouched. */
+  --blue:#6b93ff; --blue-soft:#1a2857; --blue-ink:#c5d4ff; --blue-solid:#2456e6;
+  /* --teal-ink / --amber-ink: same pattern as the --blue-ink above already
+     established — a distinct color for TEXT-ON-*-SOFT, since re-using the
+     accent color itself for that job measured under 3:1 in light mode
+     (checked: --teal on --teal-soft, --amber on --amber-soft). Dark mode's
+     own accent colors already pass fine on their -soft backgrounds
+     (7.7:1 / 8.6:1), so they're reused as-is here rather than doubled up. */
+  --teal:#2fd4bc; --teal-soft:#0e2f2b; --teal-ink:#2fd4bc;
+  --amber:#ffb84d; --amber-soft:#33260e; --amber-ink:#ffb84d;
   --danger:#ff6b70; --danger-soft:#3a1518;
   --shadow-1:0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.35);
   --shadow-2:0 2px 8px rgba(0,0,0,.5), 0 18px 50px rgba(0,0,0,.5);
@@ -59,7 +71,19 @@ body {
 }
 a { color:var(--blue); text-decoration:none; } a:hover { text-decoration:underline; }
 button { font-family:inherit; }
-::selection { background:var(--blue); color:#fff; }
+::selection { background:var(--blue-solid); color:#fff; }
+/* Tag selectors, not classes: buttons/links have no custom focus style of
+   their own today (just the browser default), so this can't double up
+   with anything. Inputs/selects/textareas are deliberately left out —
+   .field input:focus etc. further down already give those their own
+   border+glow treatment, and :focus-visible matches on ANY focus for
+   form controls (not just keyboard), so adding this on top of that
+   would show two rings at once. :focus-visible (not :focus) so a mouse
+   click doesn't show a ring — only keyboard/programmatic focus does. */
+button:focus-visible, a:focus-visible {
+  outline: 2.5px solid var(--blue-solid);
+  outline-offset: 2px;
+}
 .wrap { max-width:1180px; margin:0 auto; padding:0 22px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
 
@@ -75,6 +99,16 @@ button { font-family:inherit; }
   opacity:0; transition:width .3s ease-out, opacity .35s ease-out;
 }
 .pageprogress.on { opacity:1; }
+
+/* off-screen until keyboard-focused (classic skip-link pattern) — a mouse
+   user never sees it; a keyboard user tabbing from the very top of the
+   page does, and can jump straight past the header + hero to the form. */
+.skiplink {
+  position:absolute; top:-100px; left:12px; z-index:3000;
+  background:var(--blue-solid); color:#fff; padding:10px 18px; border-radius:999px;
+  font-weight:700; font-size:.85rem; transition:top .15s;
+}
+.skiplink:focus { top:12px; }
 /* ============================== HEADER ================================== */
 .hdr {
   position:sticky; top:0; z-index:200; backdrop-filter:blur(14px);
@@ -100,7 +134,7 @@ button { font-family:inherit; }
 }
 .iconbtn:hover { transform:translateY(-1px); box-shadow:var(--shadow-1); }
 .iconbtn:active { transform:scale(.94); }
-.iconbtn .cnt { background:var(--blue); color:#fff; font-size:.68rem; min-width:17px; height:17px; border-radius:999px;
+.iconbtn .cnt { background:var(--blue-solid); color:#fff; font-size:.68rem; min-width:17px; height:17px; border-radius:999px;
   display:inline-flex; align-items:center; justify-content:center; padding:0 4px; transition:background .2s, color .2s; }
 .iconbtn .cnt.zero { background:var(--card2); color:var(--ink-faint); }
 .iconbtn .cnt.bump { animation:pop2 .35s; }
@@ -167,7 +201,7 @@ button { font-family:inherit; }
 }
 .seg button svg { width:20px; height:20px; stroke:currentColor; }
 .seg button:hover { border-color:var(--blue); color:var(--ink); }
-.seg button.on { background:var(--blue); border-color:var(--blue); color:#fff; box-shadow:var(--shadow-1); }
+.seg button.on { background:var(--blue-solid); border-color:var(--blue-solid); color:#fff; box-shadow:var(--shadow-1); }
 
 /* area pills */
 .glabel { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-faint); margin:10px 0 6px; }
@@ -177,7 +211,7 @@ button { font-family:inherit; }
   padding:6px 12px; font-size:.78rem; font-weight:500; cursor:pointer; transition:all .13s;
 }
 .pill:hover { border-color:var(--blue); color:var(--ink); transform:translateY(-1px); }
-.pill.on { background:var(--blue); border-color:var(--blue); color:#fff; font-weight:600; }
+.pill.on { background:var(--blue-solid); border-color:var(--blue-solid); color:#fff; font-weight:600; }
 .pill:active { transform:scale(.95); }
 
 /* inputs */
@@ -222,7 +256,7 @@ button { font-family:inherit; }
 .anchorchiprow { margin-top:9px; }
 .anchorchip {
   display:inline-flex; align-items:center; gap:7px; border:1.5px solid var(--teal);
-  background:var(--teal-soft); color:var(--teal); border-radius:999px; padding:5px 6px 5px 12px;
+  background:var(--teal-soft); color:var(--teal-ink); border-radius:999px; padding:5px 6px 5px 12px;
   font-size:.78rem; font-weight:600; max-width:100%;
 }
 .anchorchip .lbl { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -236,9 +270,9 @@ button { font-family:inherit; }
   border:1px solid var(--line); background:var(--card); color:var(--ink-soft); font-size:.72rem; font-weight:600;
   padding:4px 11px; border-radius:999px; cursor:pointer; transition:all .13s;
 }
-.radiuspicker button.on { background:var(--blue); color:#fff; border-color:var(--blue); }
+.radiuspicker button.on { background:var(--blue-solid); color:#fff; border-color:var(--blue-solid); }
 .radiuspicker button:hover:not(.on) { border-color:var(--blue); color:var(--blue); }
-.mchip.anchor { background:var(--teal-soft); color:var(--teal); border-color:var(--teal); }
+.mchip.anchor { background:var(--teal-soft); color:var(--teal-ink); border-color:var(--teal); }
 .mchip.fit { background:var(--blue-soft); color:var(--blue-ink); }
 .mchip.style { background:var(--card); color:var(--ink-soft); font-weight:600; }
 .mchip.strong { color:var(--ink); font-weight:700; background:var(--card); border-color:var(--line); }
@@ -248,7 +282,7 @@ button { font-family:inherit; }
 .chip { display:inline-flex; align-items:center; gap:6px; border:1px dashed var(--line); background:transparent; color:var(--ink-soft);
   border-radius:999px; padding:5px 11px; font-size:.75rem; cursor:pointer; transition:all .13s; }
 .chip:hover { border-color:var(--blue); color:var(--blue); }
-.chip.on { border-style:solid; background:var(--teal-soft); border-color:var(--teal); color:var(--teal); font-weight:600; }
+.chip.on { border-style:solid; background:var(--teal-soft); border-color:var(--teal); color:var(--teal-ink); font-weight:600; }
 .chip:active { transform:scale(.95); }
 .chip .x { display:none; font-size:.65rem; } .chip.on .x { display:inline; }
 
@@ -260,7 +294,7 @@ button { font-family:inherit; }
 .meterbar { height:6px; border-radius:99px; background:var(--line2); overflow:hidden; margin-bottom:11px; }
 .meterbar i { display:block; height:100%; width:100%; border-radius:99px; background:linear-gradient(90deg,var(--teal),var(--blue)); transition:width .5s cubic-bezier(.2,.8,.2,1); }
 .gobtn {
-  width:100%; border:none; border-radius:var(--r-sm); background:var(--blue); color:#fff; font-family:var(--disp);
+  width:100%; border:none; border-radius:var(--r-sm); background:var(--blue-solid); color:#fff; font-family:var(--disp);
   font-size:1rem; font-weight:700; padding:13px; cursor:pointer; letter-spacing:.01em;
   transition:transform .15s, box-shadow .15s, filter .15s; box-shadow:0 6px 18px color-mix(in srgb, var(--blue) 35%, transparent);
 }
@@ -283,7 +317,7 @@ button { font-family:inherit; }
 .rtool .sp { flex:1; }
 .viewtog { display:inline-flex; background:var(--card); border:1px solid var(--line); border-radius:999px; padding:3px; }
 .viewtog button { border:none; background:transparent; color:var(--ink-soft); font-size:.78rem; font-weight:600; padding:6px 14px; border-radius:999px; cursor:pointer; transition:all .15s; }
-.viewtog button.on { background:var(--blue); color:#fff; }
+.viewtog button.on { background:var(--blue-solid); color:#fff; }
 
 .welcome { border:1.5px dashed var(--line); border-radius:var(--r); padding:44px 30px; text-align:center; color:var(--ink-soft); }
 .welcome .big { font-size:2rem; margin-bottom:8px; }
@@ -391,9 +425,9 @@ button { font-family:inherit; }
 .bact .who { font-size:.76rem; color:var(--ink-soft); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
 .abtn { border:1px solid var(--line); background:var(--card); color:var(--ink); font-size:.76rem; font-weight:600; padding:6.5px 13px; border-radius:999px; cursor:pointer; transition:all .14s; white-space:nowrap; }
 .abtn:hover { border-color:var(--blue); color:var(--blue); transform:translateY(-1px); }
-.abtn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+.abtn.primary { background:var(--blue-solid); border-color:var(--blue-solid); color:#fff; }
 .abtn.primary:hover { color:#fff; filter:brightness(1.08); }
-.abtn.on { background:var(--blue); border-color:var(--blue); color:#fff; }
+.abtn.on { background:var(--blue-solid); border-color:var(--blue-solid); color:#fff; }
 .abtn:active { transform:scale(.96); }
 .fav { border:1px solid var(--line); background:var(--card); width:31px; height:31px; border-radius:50%; cursor:pointer; font-size:.85rem; color:var(--ink-faint); display:inline-flex; align-items:center; justify-content:center; transition:all .15s; }
 .fav:hover { transform:scale(1.12); border-color:var(--danger); color:var(--danger); }
@@ -402,7 +436,7 @@ button { font-family:inherit; }
 @keyframes pop2 { 50% { transform:scale(1.3); } }
 
 .schip { font-size:.68rem; font-weight:700; padding:1.5px 8px; border-radius:999px; font-variant-numeric:tabular-nums; }
-.estchip { font-size:.72rem; font-weight:600; color:var(--amber); background:var(--amber-soft);
+.estchip { font-size:.72rem; font-weight:600; color:var(--amber-ink); background:var(--amber-soft);
   padding:1.5px 8px; border-radius:999px; cursor:help; white-space:nowrap; }
 .copybtn { border:1px solid var(--line); background:var(--card); color:var(--ink-faint); width:26px; height:26px;
   border-radius:7px; cursor:pointer; font-size:.72rem; flex:none; transition:all .13s; }
@@ -420,10 +454,19 @@ button { font-family:inherit; }
 .showmore:hover { border-color:var(--blue); background:var(--blue-soft); }
 /* ============================== LANDLORDS =============================== */
 .llgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; margin-top:6px; }
-.llcard { background:var(--card); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow-1); padding:17px 18px; animation:rise .45s .1s cubic-bezier(.2,.8,.25,1) both; }
+.llcard {
+  background:var(--card); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow-1);
+  padding:17px 18px; animation:rise .45s .1s cubic-bezier(.2,.8,.25,1) both;
+  transition:box-shadow .2s;
+}
+/* box-shadow only, no transform — same reason .bcard:hover avoids
+   transform: the entrance animation above holds transform:none via its
+   `both` fill-mode, which would silently outrank a plain :hover rule that
+   also touched transform (see the longer note on .persona's animation). */
+.llcard:hover { box-shadow:var(--shadow-2); }
 .llhead { display:flex; align-items:center; gap:9px; margin-bottom:11px; flex-wrap:wrap; }
 .lltag { font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); background:var(--card2); border:1px solid var(--line2); padding:3px 9px; border-radius:999px; }
-.lltag.match { background:var(--teal-soft); border-color:var(--teal); color:var(--teal); }
+.lltag.match { background:var(--teal-soft); border-color:var(--teal); color:var(--teal-ink); }
 .llstat { display:flex; align-items:baseline; gap:10px; margin:4px 0 12px; }
 .llstat b { font-family:var(--disp); font-size:2rem; font-weight:800; letter-spacing:-.03em; color:var(--blue); line-height:1; font-variant-numeric:tabular-nums; }
 .llstat span { font-size:.74rem; color:var(--ink-soft); line-height:1.3; }
@@ -434,7 +477,7 @@ button { font-family:inherit; }
 .track b { display:block; height:100%; width:var(--w); background:var(--blue); border-radius:99px; animation:grow .9s cubic-bezier(.2,.8,.2,1); }
 .track.teal b { background:var(--teal); }
 .llsig .rsn { font-size:.72rem; color:var(--ink-soft); margin-top:4px; line-height:1.45; }
-.llsig .rsn mark { background:var(--amber-soft); color:var(--amber); font-weight:600; padding:0 3px; border-radius:4px; }
+.llsig .rsn mark { background:var(--amber-soft); color:var(--amber-ink); font-weight:600; padding:0 3px; border-radius:4px; }
 .llfoot { display:flex; align-items:center; gap:8px; border-top:1px solid var(--line2); padding-top:11px; font-size:.74rem; color:var(--ink-soft); flex-wrap:wrap; }
 .llfoot .who { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sechead { font-family:var(--disp); font-weight:700; font-size:1.06rem; letter-spacing:-.015em; margin:30px 0 4px; display:flex; align-items:center; gap:9px; }
@@ -479,7 +522,7 @@ button { font-family:inherit; }
   border:1px solid var(--line); background:var(--card2); color:var(--ink-soft); font-size:.72rem; font-weight:600;
   padding:4px 10px; border-radius:999px; cursor:pointer; transition:all .13s; pointer-events:auto;
 }
-.mapradius button.on { background:var(--blue); color:#fff; border-color:var(--blue); }
+.mapradius button.on { background:var(--blue-solid); color:#fff; border-color:var(--blue-solid); }
 .mapradius button:hover:not(.on) { border-color:var(--blue); color:var(--blue); }
 .mapnote { font-size:.72rem; color:var(--ink-faint); margin:-8px 0 16px; display:none; }
 .onboardhint {
@@ -487,7 +530,7 @@ button { font-family:inherit; }
   border:1px solid var(--blue); border-radius:var(--r-sm); padding:9px 13px; margin-bottom:12px; font-size:.82rem;
 }
 .onboardhint button {
-  margin-left:auto; border:none; background:var(--blue); color:#fff; font-weight:700; font-size:.74rem;
+  margin-left:auto; border:none; background:var(--blue-solid); color:#fff; font-weight:700; font-size:.74rem;
   padding:5px 13px; border-radius:999px; cursor:pointer; flex:none; white-space:nowrap;
 }
 .onboardhint button:hover { filter:brightness(1.08); }
@@ -531,7 +574,7 @@ button { font-family:inherit; }
 .lpills { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px; }
 .lpill { font-size:.7rem; padding:3.5px 10px; border-radius:999px; background:var(--blue-soft); color:var(--blue-ink); font-weight:600; }
 .modalrow { display:flex; gap:10px; justify-content:flex-end; margin-top:19px; }
-.modalrow button { font:inherit; font-weight:700; border:none; border-radius:var(--r-sm); padding:10px 19px; cursor:pointer; background:var(--blue); color:#fff; transition:filter .15s; }
+.modalrow button { font:inherit; font-weight:700; border:none; border-radius:var(--r-sm); padding:10px 19px; cursor:pointer; background:var(--blue-solid); color:#fff; transition:filter .15s; }
 .modalrow button:hover { filter:brightness(1.08); }
 .modalrow .ghost { background:transparent; border:1.5px solid var(--line); color:var(--ink); }
 .modalrow button[disabled] { opacity:.55; cursor:wait; }
@@ -551,6 +594,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
 </head>
 <body>
 
+<a class="skiplink" href="#f" id="skiplink">Skip to search</a>
 <div class="pageprogress" id="pageprogress" role="progressbar" aria-hidden="true"></div>
 
 <header class="hdr"><div class="wrap hdr-in">
@@ -571,7 +615,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
 
 <main class="wrap layout">
   <aside class="rail">
-    <form class="panel" id="f" autocomplete="off">
+    <form class="panel" id="f" autocomplete="off" tabindex="-1">
       <div class="step">
         <h3><span class="n">1</span> What kind of space?</h3>
         <div class="seg" id="typeseg"></div>
@@ -725,7 +769,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
 </div>
 
 <button class="topbtn" id="topbtn" data-tt="Back to top" aria-label="Back to top">↑</button>
-<div class="toasts" id="toasts"></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
 <footer class="foot"><div class="wrap">
   <span id="freshfoot"></span>
@@ -812,6 +856,35 @@ function progressDone() {
   bar.style.width = "100%";
   setTimeout(() => { bar.classList.remove("on"); bar.style.width = "0%"; }, 380);
 }
+
+/* ---------------- modal/drawer focus management --------------------------
+   Two overlays exist (lead modal, favorites drawer) and both cover the
+   full viewport (position:fixed; inset:0 on their backdrops), so only one
+   can ever be genuinely open/reachable at a time — one shared "what to
+   refocus on close" variable is enough; there's no real nesting to
+   account for. Wired into each overlay's open/close functions below. */
+let returnFocusEl = null;
+function focusableEls(container) {
+  return [...container.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )].filter(el => el.offsetParent !== null);
+}
+/* Keeps Tab from leaking out to the page behind an open modal/drawer —
+   without this, a keyboard user could tab straight past the dialog into
+   "background" content that's supposed to be inert while it's open. */
+function trapTabKey(e) {
+  if (e.key !== "Tab") return;
+  const container = $("leadback").classList.contains("open") ? $("leadback")
+                   : $("drawer").classList.contains("open") ? $("drawer")
+                   : null;
+  if (!container) return;
+  const focusables = focusableEls(container);
+  if (!focusables.length) return;
+  const first = focusables[0], last = focusables[focusables.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+document.addEventListener("keydown", trapTabKey);
 
 /* ---------------- dark mode ---------------------------------------------
    The initial class-on-<html> detection runs in <head> (see top of file)
@@ -940,12 +1013,23 @@ async function selectAnchorItem(i) {
   } catch (e) { toast("Couldn't reach the geocoder — try again"); }
   finally { $("anchorq").disabled = false; hideAnchorDrop(); progressDone(); }
 }
+function renderAnchorLoading() {
+  const drop = $("anchordrop");
+  drop.innerHTML = `<div class="empty">Searching…</div>`;
+  drop.hidden = false;
+}
+function renderAnchorError() {
+  const drop = $("anchordrop");
+  drop.innerHTML = `<div class="empty">Couldn't search right now — try again.</div>`;
+  drop.hidden = false;
+}
 $("anchorq").addEventListener("input", () => {
   const q = $("anchorq").value.trim();
   clearTimeout(anchorTimer);
   if (q.length < 2) { hideAnchorDrop(); return; }
   anchorTimer = setTimeout(async () => {
     const seq = ++anchorSeq;
+    renderAnchorLoading();
     try {
       if (anchorCtrl) anchorCtrl.abort();
       anchorCtrl = new AbortController();
@@ -957,7 +1041,16 @@ $("anchorq").addEventListener("input", () => {
       if (q.length >= 3) anchorItems.push({ type: "address", label: q });
       anchorHi = -1;
       renderAnchorDrop();
-    } catch (e) { /* aborted — a newer keystroke is already in flight */ }
+    } catch (e) {
+      // AbortError just means a newer keystroke superseded this request —
+      // that one is already showing its own "Searching…"/results, so
+      // there's nothing to do here. A REAL failure (network, bad JSON)
+      // used to leave the dropdown silently stuck on "Searching…" forever;
+      // now it says so, but only if a newer keystroke hasn't already
+      // moved on (stale-response guard, same `seq` pattern as elsewhere
+      // in this function).
+      if (e.name !== "AbortError" && seq === anchorSeq) renderAnchorError();
+    }
   }, 220);
 });
 $("anchorq").addEventListener("keydown", e => {
@@ -1190,6 +1283,18 @@ document.addEventListener("keydown", e => {
 addEventListener("scroll", () => $("topbtn").classList.toggle("show", scrollY > 700), { passive: true });
 $("topbtn").addEventListener("click", () => scrollTo({ top: 0, behavior: "smooth" }));
 
+/* ---------------- skip link ---------------------------------------------
+   A plain href="#f" anchor SCROLLS to the form but browsers don't reliably
+   move actual keyboard focus onto a non-natively-focusable element like a
+   <form> just from the URL fragment — tabindex="-1" (on the form, in the
+   HTML above) makes it programmatically focusable, and .focus() here does
+   the rest, so the very next real Tab press continues from inside it. */
+$("skiplink").addEventListener("click", (e) => {
+  e.preventDefault();
+  $("f").focus();
+  $("f").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
 /* ---------------- toasts ----------------------------------------------- */
 function toast(msg) {
   const t = document.createElement("div");
@@ -1246,10 +1351,17 @@ function renderFavs() {
 $("favcnt").textContent = Object.keys(favs).length;
 $("favcnt").classList.toggle("zero", Object.keys(favs).length === 0);
 renderFavs();
-$("favbtn").addEventListener("click", () => { $("drawer").classList.add("open"); $("drawerback").classList.add("open"); });
+$("favbtn").addEventListener("click", () => {
+  returnFocusEl = document.activeElement;
+  $("drawer").classList.add("open"); $("drawerback").classList.add("open");
+  $("drawerx").focus();
+});
 $("drawerx").addEventListener("click", closeDrawer);
 $("drawerback").addEventListener("click", closeDrawer);
-function closeDrawer() { $("drawer").classList.remove("open"); $("drawerback").classList.remove("open"); }
+function closeDrawer() {
+  $("drawer").classList.remove("open"); $("drawerback").classList.remove("open");
+  if (returnFocusEl) { returnFocusEl.focus(); returnFocusEl = null; }
+}
 
 /* ---------------- shareable search URLs -------------------------------- */
 /* The whole search lives in the URL: bookmark it, send it, hit back/forward.
@@ -2001,10 +2113,14 @@ function openLead(kind, i) {
   $("leaderr").style.display = "none";
   ["ld_name", "ld_email"].forEach(id => $(id).classList.remove("bad"));
   $("e_name").textContent = $("e_email").textContent = "";
+  returnFocusEl = document.activeElement;
   $("leadback").classList.add("open");
   $("ld_name").focus();
 }
-function closeLead() { $("leadback").classList.remove("open"); }
+function closeLead() {
+  $("leadback").classList.remove("open");
+  if (returnFocusEl) { returnFocusEl.focus(); returnFocusEl = null; }
+}
 $("leadback").addEventListener("click", e => { if (e.target === $("leadback")) closeLead(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") { closeLead(); closeDrawer(); } });
 function leadSearchEcho() {
