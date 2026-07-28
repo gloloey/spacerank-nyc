@@ -771,6 +771,48 @@ function llchip(name) {
   return `<span class="mchip ll" title="${esc(name)}">${inner}${esc(name)}</span>`;
 }
 
+/* ---------------- top-of-page progress bar ------------------------------
+   Declared THIS early (before anything else runs, including the /api/areas
+   boot fetch a few hundred lines down) on purpose: progressStart() is
+   CALLED at top level from that boot fetch, immediately as the script
+   executes. A `let` binding is unusable before its own declaration line
+   has run ("temporal dead zone") even though the function that CLOSES
+   OVER it is hoisted — so if this block sat below the boot fetch instead
+   of above it, that first top-level call would throw a ReferenceError
+   and silently abort the rest of the script's startup (exactly what
+   happened when this was first written: nothing after that point ran —
+   no type buttons, no area pills, live count stuck on "—" forever).
+   Classic "creeping" progress bar: jump to 20% the instant something
+   starts (so a click always gets INSTANT feedback, before any response
+   could possibly have arrived), then creep toward 90% in ever-smaller
+   steps — it never promises 100% until the real response has actually
+   landed. progressDone() then snaps it the rest of the way and fades it.
+   _progDepth is a counter, not a boolean, because calls can nest: e.g. the
+   boot fetch triggers doSearch() (from a shared search URL) before the
+   boot fetch's own "done" has fired — without a counter the outer call's
+   completion would hide the bar while the inner search is still running. */
+let _progDepth = 0, _progPct = 0, _progTimer = null;
+function progressStart() {
+  _progDepth++;
+  if (_progDepth > 1) return;
+  const bar = $("pageprogress");
+  _progPct = 0; bar.style.width = "0%"; bar.classList.add("on");
+  requestAnimationFrame(() => { _progPct = 20; bar.style.width = "20%"; });
+  clearInterval(_progTimer);
+  _progTimer = setInterval(() => {
+    _progPct += (90 - _progPct) * 0.1;
+    bar.style.width = _progPct.toFixed(1) + "%";
+  }, 280);
+}
+function progressDone() {
+  _progDepth = Math.max(0, _progDepth - 1);
+  if (_progDepth > 0) return;
+  clearInterval(_progTimer);
+  const bar = $("pageprogress");
+  bar.style.width = "100%";
+  setTimeout(() => { bar.classList.remove("on"); bar.style.width = "0%"; }, 380);
+}
+
 /* ---------------- dark mode ---------------------------------------------
    The initial class-on-<html> detection runs in <head> (see top of file)
    so it happens before first paint — this just wires up the toggle. */
@@ -1147,38 +1189,6 @@ document.addEventListener("keydown", e => {
 /* ---------------- back to top ------------------------------------------ */
 addEventListener("scroll", () => $("topbtn").classList.toggle("show", scrollY > 700), { passive: true });
 $("topbtn").addEventListener("click", () => scrollTo({ top: 0, behavior: "smooth" }));
-
-/* ---------------- top-of-page progress bar ------------------------------
-   Classic "creeping" progress bar: jump to 20% the instant something
-   starts (so a click always gets INSTANT feedback, before any response
-   could possibly have arrived), then creep toward 90% in ever-smaller
-   steps — it never promises 100% until the real response has actually
-   landed. progressDone() then snaps it the rest of the way and fades it.
-   _progDepth is a counter, not a boolean, because calls can nest: e.g. the
-   boot fetch triggers doSearch() (from a shared search URL) before the
-   boot fetch's own "done" has fired — without a counter the outer call's
-   completion would hide the bar while the inner search is still running. */
-let _progDepth = 0, _progPct = 0, _progTimer = null;
-function progressStart() {
-  _progDepth++;
-  if (_progDepth > 1) return;
-  const bar = $("pageprogress");
-  _progPct = 0; bar.style.width = "0%"; bar.classList.add("on");
-  requestAnimationFrame(() => { _progPct = 20; bar.style.width = "20%"; });
-  clearInterval(_progTimer);
-  _progTimer = setInterval(() => {
-    _progPct += (90 - _progPct) * 0.1;
-    bar.style.width = _progPct.toFixed(1) + "%";
-  }, 280);
-}
-function progressDone() {
-  _progDepth = Math.max(0, _progDepth - 1);
-  if (_progDepth > 0) return;
-  clearInterval(_progTimer);
-  const bar = $("pageprogress");
-  bar.style.width = "100%";
-  setTimeout(() => { bar.classList.remove("on"); bar.style.width = "0%"; }, 380);
-}
 
 /* ---------------- toasts ----------------------------------------------- */
 function toast(msg) {
