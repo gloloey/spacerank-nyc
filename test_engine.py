@@ -210,8 +210,56 @@ def test_anchor_pools_with_areas_in_geo_score():
     assert pooled == 1.0
     # no areas and no anchor -> neutral, same as before this feature existed
     assert score_geo(40.72, -74.0, [])[0] == 0.5
-    d, label = nearest_geo_target(40.735736, -73.990568, [], station)
-    assert label == "14 St-Union Sq" and d < 0.1
+    d, label, custom_radius = nearest_geo_target(40.735736, -73.990568, [], station)
+    assert label == "14 St-Union Sq" and d < 0.1 and custom_radius is None
+
+
+def test_anchor_radius_is_sanitized():
+    """A drawn-radius anchor (map-click "search within N miles") is
+    user-controlled input like everything else here: an out-of-bounds
+    radius clamps to ANCHOR_RADIUS_BOUNDS rather than being trusted raw,
+    and a malformed radius drops just the radius — the point itself
+    still survives, same as scraper-style honest partial failure."""
+    from matching import ANCHOR_RADIUS_BOUNDS
+    lo, hi = ANCHOR_RADIUS_BOUNDS
+    base = {"lat": 40.7357, "lng": -73.9906, "label": "x"}
+    ok = TenantRequest(property_type="Office", anchor={**base, "radius_mi": 1.5}).anchor
+    assert ok["radius_mi"] == 1.5
+    clamped_hi = TenantRequest(property_type="Office", anchor={**base, "radius_mi": 999}).anchor
+    assert clamped_hi["radius_mi"] == hi
+    clamped_lo = TenantRequest(property_type="Office", anchor={**base, "radius_mi": -3}).anchor
+    assert clamped_lo["radius_mi"] == lo
+    bad = TenantRequest(property_type="Office", anchor={**base, "radius_mi": "nope"}).anchor
+    assert "radius_mi" not in bad and bad["lat"] == 40.7357
+
+
+def test_anchor_radius_overrides_default_curve_and_filter():
+    """A drawn radius REPLACES the fixed 0.3 mi/5 mi ranking curve and the
+    0.5 mi hard-filter radius with the tenant's own choice — not just an
+    extra input alongside them."""
+    center_lat, center_lng = 40.735736, -73.990568
+    anchor_small = {"label": "here", "lat": center_lat, "lng": center_lng, "radius_mi": 0.2}
+    anchor_plain = {"label": "here", "lat": center_lat, "lng": center_lng}
+
+    # dead center -> full credit regardless of radius size
+    assert score_geo(center_lat, center_lng, [], anchor_small)[0] == 1.0
+
+    # a point confirmed (via the real haversine) to sit outside the drawn
+    # 0.2 mi circle should score noticeably worse under the custom radius
+    # than the exact same point does under the old fixed default curve
+    far_lat = center_lat + 0.01
+    assert haversine_mi(center_lat, center_lng, far_lat, center_lng) > anchor_small["radius_mi"]
+    custom_score = score_geo(far_lat, center_lng, [], anchor_small)[0]
+    default_score = score_geo(far_lat, center_lng, [], anchor_plain)[0]
+    assert custom_score < default_score
+
+    # the hard filter (count preview) must also shrink, never grow, as the
+    # drawn radius shrinks at a fixed point
+    from matching import count_spaces
+    small = count_spaces(TenantRequest(property_type="Office", anchor=anchor_small))["count"]
+    big = count_spaces(TenantRequest(property_type="Office",
+                       anchor={**anchor_small, "radius_mi": 3.0}))["count"]
+    assert small <= big
 
 
 def test_anchor_is_a_hard_filter_like_areas_for_count():

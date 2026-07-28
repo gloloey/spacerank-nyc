@@ -47,15 +47,17 @@ STYLE_ORDER_BONUS = 0.04
 
 def _in_area(space, req):
     """Within AREA_RADIUS_MI of ANY selected submarket OR the custom anchor
-    point. Unknown coords fail (we never claim a location we can't verify).
-    No areas and no anchor -> True."""
+    point — a drawn-radius anchor uses its OWN chosen radius instead of
+    AREA_RADIUS_MI. Unknown coords fail (we never claim a location we
+    can't verify). No areas and no anchor -> True."""
     if not req.areas and not req.anchor:
         return True
     lat, lng = space.get("lat"), space.get("lng")
     if lat is None or lng is None:
         return False
-    d, _ = nearest_geo_target(lat, lng, req.areas, req.anchor)
-    return d is not None and d <= AREA_RADIUS_MI
+    d, _label, custom_radius = nearest_geo_target(lat, lng, req.areas, req.anchor)
+    radius = custom_radius if custom_radius is not None else AREA_RADIUS_MI
+    return d is not None and d <= radius
 
 
 def passes_hard_filters(space, req):

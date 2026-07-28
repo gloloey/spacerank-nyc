@@ -63,13 +63,16 @@ def dataset_meta():
 
 def build_request(property_type, size_min, size_max, budget, areas, q,
                   landlord_style, term, fit=None,
-                  anchor_lat=None, anchor_lng=None, anchor_label=None):
+                  anchor_lat=None, anchor_lng=None, anchor_label=None,
+                  anchor_radius_mi=None):
     """One place where HTTP query params become a TenantRequest.
     TenantRequest itself sanitizes nonsense (budget<=0, swapped sizes,
-    a bogus anchor point off the edge of the map...)."""
+    a bogus anchor point off the edge of the map, a bogus radius...)."""
     anchor = None
     if anchor_lat is not None and anchor_lng is not None:
         anchor = {"lat": anchor_lat, "lng": anchor_lng, "label": anchor_label}
+        if anchor_radius_mi is not None:
+            anchor["radius_mi"] = anchor_radius_mi
     return TenantRequest(
         property_type=property_type,
         size_min=size_min, size_max=size_max,
@@ -153,13 +156,14 @@ def count(property_type: str = Query("Office"),
           budget: float | None = None,
           area: list[str] = Query(default=[]),
           anchor_lat: float | None = None, anchor_lng: float | None = None,
-          anchor_label: str | None = None):
+          anchor_label: str | None = None, anchor_radius_mi: float | None = None):
     """Live preview for the search button: spaces passing the HARD filters.
     Style / fit / term / free text are ranking inputs, never filters — by
     design they aren't even parameters here. The custom anchor point DOES
     filter, same as area, since it's a location constraint."""
     req = build_request(property_type, size_min, size_max, budget, area, "", None, None,
-                        anchor_lat=anchor_lat, anchor_lng=anchor_lng, anchor_label=anchor_label)
+                        anchor_lat=anchor_lat, anchor_lng=anchor_lng, anchor_label=anchor_label,
+                        anchor_radius_mi=anchor_radius_mi)
     return count_spaces(req)
 
 
@@ -173,11 +177,12 @@ def match(property_type: str = Query("Office"),
           term: str | None = None,
           fit: str | None = None,
           anchor_lat: float | None = None, anchor_lng: float | None = None,
-          anchor_label: str | None = None,
+          anchor_label: str | None = None, anchor_radius_mi: float | None = None,
           top_n: int = Query(100, le=500)):
     req = build_request(property_type, size_min, size_max, budget, area, q,
                         landlord_style, term, fit=fit,
-                        anchor_lat=anchor_lat, anchor_lng=anchor_lng, anchor_label=anchor_label)
+                        anchor_lat=anchor_lat, anchor_lng=anchor_lng, anchor_label=anchor_label,
+                        anchor_radius_mi=anchor_radius_mi)
     results = rank_spaces(req, top_n=top_n)
     return {"results": results,
             "total_ranked": len(results),
@@ -199,11 +204,12 @@ def landlords(property_type: str = Query("Office"),
               term: str | None = None,
               fit: str | None = None,
               anchor_lat: float | None = None, anchor_lng: float | None = None,
-              anchor_label: str | None = None,
+              anchor_label: str | None = None, anchor_radius_mi: float | None = None,
               top_n: int = 5):
     req = build_request(property_type, size_min, size_max, budget, area, q,
                         landlord_style, term, fit=fit,
-                        anchor_lat=anchor_lat, anchor_lng=anchor_lng, anchor_label=anchor_label)
+                        anchor_lat=anchor_lat, anchor_lng=anchor_lng, anchor_label=anchor_label,
+                        anchor_radius_mi=anchor_radius_mi)
     return {"results": rank_landlords(req, top_n=top_n),
             "request_echo": {"term": req.term, "areas": req.areas,
                              "landlord_style": req.landlord_style,

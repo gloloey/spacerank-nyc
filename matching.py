@@ -216,11 +216,16 @@ class TenantRequest:
     landlord_style: str | None = None      # "institutional" | "family-run" | None
     term: str | None = None                # "short" | "long" — STORED ONLY
     fit_preference: str | None = None      # "turnkey" | "raw" | None
-    anchor: dict | None = None             # {"label","lat","lng"} — a single
-                                            # custom "near here" point (a
-                                            # subway station or a geocoded
-                                            # address), pooled with `areas`
-                                            # in the geo signal (see score_geo)
+    anchor: dict | None = None             # {"label","lat","lng","radius_mi"?}
+                                            # — a single custom "near here"
+                                            # point (a subway station, a
+                                            # geocoded address, or a map click
+                                            # for a drawn-radius search),
+                                            # pooled with `areas` in the geo
+                                            # signal (see score_geo). radius_mi
+                                            # is optional: when set, it REPLACES
+                                            # the fixed submarket radius for
+                                            # this anchor specifically.
     weights: dict = field(default_factory=lambda: dict(WEIGHTS))
 
     def __post_init__(self):
@@ -239,10 +244,14 @@ class TenantRequest:
         self.anchor = _clean_anchor(self.anchor)
 
 
+ANCHOR_RADIUS_BOUNDS = (0.1, 5.0)   # mi — same outer edge as score_geo's old fixed fade span
+
+
 def _clean_anchor(anchor):
-    """A custom geo-anchor is user-controlled input (a picked station or a
-    geocoded address) — validate it the same way as every other field here:
-    silently drop it to None on anything malformed rather than crash or
+    """A custom geo-anchor is user-controlled input (a picked station, a
+    geocoded address, or a map click for a drawn-radius search) — validate
+    it the same way as every other field here: silently drop it to None
+    (or drop just the bad part) on anything malformed rather than crash or
     trust a bogus point halfway across the world."""
     if not isinstance(anchor, dict):
         return None
@@ -256,7 +265,17 @@ def _clean_anchor(anchor):
             and _NYC_BBOX["lng"][0] <= lng <= _NYC_BBOX["lng"][1]):
         return None
     label = str(anchor.get("label") or "your location").strip()[:80]
-    return {"label": label, "lat": lat, "lng": lng}
+    out = {"label": label, "lat": lat, "lng": lng}
+    radius_mi = anchor.get("radius_mi")
+    if radius_mi is not None:
+        try:
+            radius_mi = float(radius_mi)
+            if not math.isnan(radius_mi):
+                lo, hi = ANCHOR_RADIUS_BOUNDS
+                out["radius_mi"] = min(max(radius_mi, lo), hi)
+        except (TypeError, ValueError):
+            pass   # malformed radius -> drop just the radius, keep the point
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -315,35 +334,48 @@ def haversine_mi(lat1, lng1, lat2, lng2):
 
 
 def nearest_geo_target(lat, lng, area_keys, anchor=None):
-    """(distance_mi, label) of the closest point among the tenant's chosen
-    areas AND their custom anchor (a subway station or geocoded address),
-    pooled together — a tenant near either "SoHo" or "my other office" is
-    a fit. (None, None) if neither areas nor an anchor were given."""
+    """(distance_mi, label, custom_radius_mi) of the closest point among the
+    tenant's chosen areas AND their custom anchor (a subway station, a
+    geocoded address, or a drawn-radius map click), pooled together — a
+    tenant near either "SoHo" or "my other office" is a fit.
+    custom_radius_mi is None unless the WINNING candidate is an anchor that
+    carries its own radius_mi (a drawn circle) — named submarkets and a
+    plain point-anchor always use the fixed default thresholds, handled by
+    the caller. (None, None, None) if neither areas nor an anchor were
+    given."""
     if lat != lat or lng != lng:                     # NaN -> unknown location
-        return None, None
+        return None, None, None
     best = None
     for k in area_keys:
         c = AREAS[k]
         d = haversine_mi(lat, lng, c[0], c[1])
         if best is None or d < best[0]:
-            best = (d, AREA_LABELS[k])
+            best = (d, AREA_LABELS[k], None)
     if anchor:
         d = haversine_mi(lat, lng, anchor["lat"], anchor["lng"])
         if best is None or d < best[0]:
-            best = (d, anchor["label"])
-    return best if best else (None, None)
+            best = (d, anchor["label"], anchor.get("radius_mi"))
+    return best if best else (None, None, None)
 
 
 def score_geo(lat, lng, area_keys, anchor=None):
-    """Distance to the NEAREST selected area OR custom anchor point: 1.0
-    within 0.3 mi, fading to 0 at 5 mi. Several candidates = several
-    acceptable centers, the closest one counts."""
+    """Distance to the NEAREST selected area OR custom anchor point.
+    Named submarkets (and a plain point-anchor with no radius): 1.0 within
+    0.3 mi, fading to 0 at 5 mi. A drawn-radius anchor REPLACES that with
+    the tenant's own radius: full credit inside it, a short 0.3 mi taper
+    to 0 just past the edge — smooth rather than a hard cliff exactly on
+    the drawn line, but tight enough that "outside your circle" reads as
+    outside. Several candidates = several acceptable centers, the closest
+    one counts."""
     if not area_keys and not anchor:
         return 0.5, "no area requested", None
-    d, label = nearest_geo_target(lat, lng, area_keys, anchor)
+    d, label, custom_radius = nearest_geo_target(lat, lng, area_keys, anchor)
     if d is None:
         return 0.5, "location unknown", None
-    score = 1.0 if d <= 0.3 else max(0.0, 1 - (d - 0.3) / 4.7)
+    if custom_radius is not None:
+        score = 1.0 if d <= custom_radius else max(0.0, 1 - (d - custom_radius) / 0.3)
+    else:
+        score = 1.0 if d <= 0.3 else max(0.0, 1 - (d - 0.3) / 4.7)
     return score, f"{d:.1f} mi from {label}", d
 
 
@@ -387,7 +419,9 @@ def count_spaces(req: TenantRequest, csv_path: str | None = None):
       size    within range, when a range is given
       budget  rejects only KNOWN rents above budget ("Upon request" passes)
       area    within 0.5 mi of ANY selected submarket OR the custom anchor
-              point, if either was given; un-geocoded spaces fail
+              point, if either was given (a drawn-radius anchor uses its
+              OWN chosen radius instead of the 0.5 mi default); un-geocoded
+              spaces fail
     The free-text description, landlord style, fit preference, and term
     are RANKING inputs, not filters — they never change this number
     (tests enforce it).
@@ -417,8 +451,8 @@ def count_spaces(req: TenantRequest, csv_path: str | None = None):
             lat, lng = _n(row.get("lat")), _n(row.get("lng"))
             if lat is None or lng is None:
                 continue
-            d, _label = nearest_geo_target(lat, lng, req.areas, req.anchor)
-            if d is None or d > COUNT_AREA_RADIUS_MI:
+            d, _label, custom_radius = nearest_geo_target(lat, lng, req.areas, req.anchor)
+            if d is None or d > (custom_radius if custom_radius is not None else COUNT_AREA_RADIUS_MI):
                 continue
         n += 1
         ll = _s(row["landlord"])

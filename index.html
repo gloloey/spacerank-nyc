@@ -194,6 +194,13 @@ button { font-family:inherit; }
   line-height:1; padding:3px 5px; border-radius:50%; flex:none;
 }
 .anchorchip button:hover { background:color-mix(in srgb, var(--teal) 22%, transparent); }
+.radiuspicker { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+.radiuspicker button {
+  border:1px solid var(--line); background:var(--card); color:var(--ink-soft); font-size:.72rem; font-weight:600;
+  padding:4px 11px; border-radius:999px; cursor:pointer; transition:all .13s;
+}
+.radiuspicker button.on { background:var(--blue); color:#fff; border-color:var(--blue); }
+.radiuspicker button:hover:not(.on) { border-color:var(--blue); color:var(--blue); }
 .mchip.anchor { background:var(--teal-soft); color:var(--teal); border-color:var(--teal); }
 .mchip.fit { background:var(--blue-soft); color:var(--blue-ink); }
 .mchip.style { background:var(--card); color:var(--ink-soft); font-weight:600; }
@@ -324,6 +331,7 @@ button { font-family:inherit; }
 .abtn:hover { border-color:var(--blue); color:var(--blue); transform:translateY(-1px); }
 .abtn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
 .abtn.primary:hover { color:#fff; filter:brightness(1.08); }
+.abtn.on { background:var(--blue); border-color:var(--blue); color:#fff; }
 .fav { border:1px solid var(--line); background:var(--card); width:31px; height:31px; border-radius:50%; cursor:pointer; font-size:.85rem; color:var(--ink-faint); display:inline-flex; align-items:center; justify-content:center; transition:all .15s; }
 .fav:hover { transform:scale(1.12); border-color:var(--danger); color:var(--danger); }
 .fav.on { background:var(--danger-soft); border-color:var(--danger); color:var(--danger); animation:pop2 .3s; }
@@ -535,6 +543,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
       <span class="cline" id="countline"></span>
       <span class="sp"></span>
       <button class="abtn" id="sharebtn" data-tt="Copy a link to this exact search — filters, areas and vibe included.">🔗 Share search</button>
+      <button class="abtn" id="drawbtn" hidden data-tt="Click a point on the map, then pick a radius, to search a custom area instead of a named neighborhood.">📐 Draw area</button>
       <div class="viewtog" id="viewtog">
         <button data-v="list" class="on">☰ List</button>
         <button data-v="map">◎ Map</button>
@@ -714,22 +723,36 @@ const FIT_LOOKUP = {};
    backend: matching.py's score_geo pools areas + anchor into one nearest-
    candidate check). Resolved to a plain lat/lng CLIENT-side so /api/match
    and /api/count never re-geocode per search. --------------------------- */
-let anchor = null;                       // {label, lat, lng} | null
+let anchor = null;                       // {label, lat, lng, radius_mi?} | null
 let anchorItems = [], anchorHi = -1;
 let anchorTimer = null, anchorCtrl = null, anchorSeq = 0;
+const RADIUS_PRESETS = [0.25, 0.5, 1, 2];
 
 function renderAnchorChip() {
   const row = $("anchorchiprow");
   if (!anchor) { row.innerHTML = ""; return; }
-  row.innerHTML = `<span class="anchorchip"><span class="lbl">📍 Near ${esc(anchor.label)}</span>
+  const lbl = anchor.radius_mi
+    ? `⭕ ${anchor.radius_mi} mi radius you drew`
+    : `📍 Near ${esc(anchor.label)}`;
+  let html = `<span class="anchorchip"><span class="lbl">${lbl}</span>
     <button type="button" id="anchorclear" aria-label="Remove anchor point">✕</button></span>`;
-  $("anchorclear").addEventListener("click", () => setAnchor(null));
+  if (anchor.radius_mi) {
+    html += `<div class="radiuspicker">` + RADIUS_PRESETS.map(r =>
+      `<button type="button" class="${r === anchor.radius_mi ? "on" : ""}" data-r="${r}">${r} mi</button>`).join("") + `</div>`;
+  }
+  row.innerHTML = html;
+  $("anchorclear").addEventListener("click", () => { setAnchor(null); exitDrawMode(); });
+  if (anchor.radius_mi) {
+    row.querySelectorAll(".radiuspicker button").forEach(b => b.addEventListener("click", () =>
+      setAnchor({ ...anchor, radius_mi: +b.dataset.r })));
+  }
 }
 function setAnchor(a) {
   anchor = a;
   $("anchorq").value = "";
   hideAnchorDrop();
   renderAnchorChip();
+  drawAnchorCircle();
   refreshCount();
 }
 function hideAnchorDrop() { $("anchordrop").hidden = true; anchorItems = []; anchorHi = -1; }
@@ -910,6 +933,7 @@ function params(withRankInputs = true) {
   selectedAreas.forEach(k => p.append("area", k));
   if (anchor) {   // a location constraint, like areas — included even for the count-only preview
     p.set("anchor_lat", anchor.lat); p.set("anchor_lng", anchor.lng); p.set("anchor_label", anchor.label);
+    if (anchor.radius_mi) p.set("anchor_radius_mi", anchor.radius_mi);
   }
   if (withRankInputs) {
     p.set("q", $("q").value);
@@ -1079,7 +1103,10 @@ function writeUrl() {
   if ($("smax").value) p.set("smax", $("smax").value);
   if ($("budget").value) p.set("budget", $("budget").value);
   if (selectedAreas.size) p.set("areas", [...selectedAreas].join(","));
-  if (anchor) { p.set("alat", anchor.lat); p.set("alng", anchor.lng); p.set("alabel", anchor.label); }
+  if (anchor) {
+    p.set("alat", anchor.lat); p.set("alng", anchor.lng); p.set("alabel", anchor.label);
+    if (anchor.radius_mi) p.set("aradius", anchor.radius_mi);
+  }
   if ($("style").value) p.set("style", $("style").value);
   if ($("term").value) p.set("term", $("term").value);
   if ($("fit").value) p.set("fit", $("fit").value);
@@ -1088,7 +1115,7 @@ function writeUrl() {
 }
 function readUrl() {
   const p = new URLSearchParams(location.search);
-  const KEYS = ["type","smin","smax","budget","areas","alat","alng","style","term","fit","q"];
+  const KEYS = ["type","smin","smax","budget","areas","alat","alng","aradius","style","term","fit","q"];
   if (![...p.keys()].some(k => KEYS.includes(k))) return false;
   if (p.get("type")) { curType = p.get("type"); renderTypes(); renderChips(); }
   $("smin").value = p.get("smin") || ""; $("smax").value = p.get("smax") || "";
@@ -1097,7 +1124,9 @@ function readUrl() {
   (p.get("areas") || "").split(",").filter(Boolean).forEach(k => selectedAreas.add(k));
   if (p.get("alat") && p.get("alng")) {
     anchor = { lat: parseFloat(p.get("alat")), lng: parseFloat(p.get("alng")), label: p.get("alabel") || "your location" };
+    if (p.get("aradius")) anchor.radius_mi = parseFloat(p.get("aradius"));
     renderAnchorChip();
+    drawAnchorCircle();
   }
   $("style").value = p.get("style") || ""; $("term").value = p.get("term") || "";
   $("fit").value = p.get("fit") || "";
@@ -1249,7 +1278,7 @@ function mailtoHref(email, g) {
     ($("budget").value ? `- Budget: ~$${$("budget").value}/SF/yr\n` : "") +
     (term ? `- Lease term: ${term === "short" ? "short (under ~3 years)" : "long (3+ years)"}\n` : "") +
     (selectedAreas.size ? `- Areas: ${[...selectedAreas].map(k => AREA_LOOKUP[k] || k).join(", ")}\n` : "") +
-    (anchor ? `- Near: ${anchor.label}\n` : "") +
+    (anchor ? `- Near: ${anchor.radius_mi ? `within ${anchor.radius_mi} mi of a point I picked on the map` : anchor.label}\n` : "") +
     ($("fit").value ? `- Preferred condition: ${FIT_LOOKUP[$("fit").value] || $("fit").value}\n` : "") +
     `\nSuites of interest: ${g.spaces.slice(0, 3).map(s => s.suite).join("; ")}\n\nThank you`);
   return `mailto:${email}?subject=${subject}&body=${body}`;
@@ -1387,6 +1416,7 @@ function copyEmail(e) {
 /* ---------------- map: dual-mode (Google if key, else Leaflet+Carto) ---- */
 let curView = "list", map = null, gmap = null, markerLayer = null, gMarkers = [], tileLayer = null;
 $("viewtog").querySelectorAll("button").forEach(b => b.addEventListener("click", () => setView(b.dataset.v)));
+$("drawbtn").addEventListener("click", toggleDrawMode);
 function setView(v) {
   curView = v;
   $("viewtog").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
@@ -1395,6 +1425,8 @@ function setView(v) {
   $("mapnote").style.display = showMap ? "block" : "none";
   $("spaces").style.display = showMap ? "none" : "block";
   $("showmore").style.display = showMap ? "none" : (allGroups.length > shown ? "block" : "none");
+  $("drawbtn").hidden = !showMap;
+  if (!showMap) exitDrawMode();
   if (showMap) requestAnimationFrame(() => {
     if (gmap) google.maps.event.trigger(gmap, "resize");
     else if (map) map.invalidateSize();
@@ -1568,6 +1600,82 @@ function locateOnMap(idx) {
     else if (map) map.setView([r.lat, r.lng], 17, { animate: true });
   });
 }
+/* ---- draw-a-custom-search-radius ---------------------------------------
+   A third way to set the anchor point (alongside typing a subway station
+   or an address): click anywhere on the map, then pick a radius. Reuses
+   the SAME `anchor` object and hard-filter/ranking machinery already built
+   for the text-search anchor — only difference is `anchor.radius_mi` is
+   set, which the backend uses to REPLACE its fixed default radius with
+   the tenant's own drawn circle (see matching.py's nearest_geo_target). */
+let drawMode = false, anchorCircle = null, gAnchorCircle = null;
+function toggleDrawMode() {
+  drawMode = !drawMode;
+  $("drawbtn").classList.toggle("on", drawMode);
+  const canvas = $("mapcanvas");
+  if (canvas) canvas.style.cursor = drawMode ? "crosshair" : "";
+  if (drawMode) toast("Click anywhere on the map to center your search area");
+}
+function exitDrawMode() {
+  drawMode = false;
+  $("drawbtn").classList.remove("on");
+  const canvas = $("mapcanvas");
+  if (canvas) canvas.style.cursor = "";
+}
+function handleMapDrawClick(lat, lng) {
+  if (!drawMode) return;
+  setAnchor({ label: "your drawn area", lat, lng, radius_mi: (anchor && anchor.radius_mi) || 0.5 });
+  exitDrawMode();
+}
+/* Single place that keeps the anchor PIN and (if a radius is set) the
+   CIRCLE in sync on whichever map provider is active — called immediately
+   from setAnchor() (so clearing/moving/resizing the anchor updates the
+   map right away, even mid-browse without a new search) AND from
+   drawMap()/drawGoogleMap() (so a page-load-restored anchor still gets
+   drawn once the map object actually exists). */
+function drawAnchorCircle() {
+  const radiusMeters = (anchor && anchor.radius_mi) ? anchor.radius_mi * 1609.34 : null;
+  if (map) {
+    if (anchorMarker) { map.removeLayer(anchorMarker); anchorMarker = null; }
+    if (anchorCircle) { map.removeLayer(anchorCircle); anchorCircle = null; }
+    if (anchor) {
+      const aIcon = L.divIcon({ className: "", iconSize: [30, 38], iconAnchor: [15, 36],
+        html: `<div style="font-size:30px;line-height:30px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))">📍</div>` });
+      anchorMarker = L.marker([anchor.lat, anchor.lng], { icon: aIcon, zIndexOffset: 1000 })
+        .bindPopup(`<div style="color:#1a2233"><b>${esc(anchor.label)}</b><br>Your search anchor</div>`)
+        .addTo(map);
+    }
+    if (radiusMeters) {
+      // interactive:false — a click ON the circle (e.g. re-drawing over
+      // the same spot) must still reach the map's own click handler,
+      // otherwise Leaflet's default click-stops-propagation behavior for
+      // Path layers would silently swallow re-draw clicks inside it.
+      anchorCircle = L.circle([anchor.lat, anchor.lng], {
+        radius: radiusMeters, color: "#2456e6", weight: 2, fillColor: "#2456e6", fillOpacity: 0.08,
+        interactive: false,
+      }).addTo(map);
+    }
+  }
+  if (gmap) {
+    if (gAnchorMarker) { gAnchorMarker.setMap(null); gAnchorMarker = null; }
+    if (gAnchorCircle) { gAnchorCircle.setMap(null); gAnchorCircle = null; }
+    if (anchor) {
+      const info2 = new google.maps.InfoWindow();
+      gAnchorMarker = new google.maps.Marker({ position: { lat: anchor.lat, lng: anchor.lng }, map: gmap,
+        label: { text: "📍", fontSize: "20px" }, zIndex: 1000 });
+      gAnchorMarker.addListener("click", () => {
+        info2.setContent(`<div style="color:#1a2233"><b>${esc(anchor.label)}</b><br>Your search anchor</div>`);
+        info2.open(gmap, gAnchorMarker);
+      });
+    }
+    if (radiusMeters) {
+      gAnchorCircle = new google.maps.Circle({
+        center: { lat: anchor.lat, lng: anchor.lng }, radius: radiusMeters, map: gmap,
+        strokeColor: "#2456e6", strokeWeight: 2, fillColor: "#2456e6", fillOpacity: 0.08,
+        clickable: false,
+      });
+    }
+  }
+}
 function drawMap(groups) {
   mapPts = groups.map((g, idx) => ({ g, idx })).filter(o => o.g.spaces[0].lat && o.g.spaces[0].lng);
   renderTopJump();
@@ -1581,22 +1689,24 @@ function drawMap(groups) {
     }).addTo(map);
     markerLayer = L.layerGroup().addTo(map);
     map.on("zoomend", renderMapMarkers);
+    map.on("click", e => handleMapDrawClick(e.latlng.lat, e.latlng.lng));
   }
-  if (anchorMarker) { map.removeLayer(anchorMarker); anchorMarker = null; }
-  if (anchor) {
-    const aIcon = L.divIcon({ className: "", iconSize: [30, 38], iconAnchor: [15, 36],
-      html: `<div style="font-size:30px;line-height:30px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))">📍</div>` });
-    anchorMarker = L.marker([anchor.lat, anchor.lng], { icon: aIcon, zIndexOffset: 1000 })
-      .bindPopup(`<div style="color:#1a2233"><b>${esc(anchor.label)}</b><br>Your search anchor</div>`)
-      .addTo(map);
-  }
+  drawAnchorCircle();
   fitMap();
   renderMapMarkers();
 }
 function fitMap() {
   if (!mapPts.length) return;
   const bounds = mapPts.map(({ g }) => [g.spaces[0].lat, g.spaces[0].lng]);
-  if (anchor) bounds.push([anchor.lat, anchor.lng]);
+  if (anchor) {
+    bounds.push([anchor.lat, anchor.lng]);
+    if (anchor.radius_mi) {   // frame the WHOLE drawn circle, not just its center
+      const dLat = anchor.radius_mi / 69;
+      const dLng = anchor.radius_mi / (69 * Math.cos(anchor.lat * Math.PI / 180));
+      bounds.push([anchor.lat + dLat, anchor.lng], [anchor.lat - dLat, anchor.lng],
+                  [anchor.lat, anchor.lng + dLng], [anchor.lat, anchor.lng - dLng]);
+    }
+  }
   if (gmap) {
     const b = new google.maps.LatLngBounds();
     bounds.forEach(([la, ln]) => b.extend({ lat: la, lng: ln }));
@@ -1610,17 +1720,9 @@ function drawGoogleMap() {
       gmap = new google.maps.Map($("mapcanvas"), { center: { lat: 40.75, lng: -73.98 }, zoom: 13, mapTypeControl: false });
       new google.maps.TransitLayer().setMap(gmap);
       gmap.addListener("zoom_changed", renderMapMarkers);
+      gmap.addListener("click", e => handleMapDrawClick(e.latLng.lat(), e.latLng.lng()));
     }
-    if (gAnchorMarker) { gAnchorMarker.setMap(null); gAnchorMarker = null; }
-    if (anchor) {
-      const info2 = new google.maps.InfoWindow();
-      gAnchorMarker = new google.maps.Marker({ position: { lat: anchor.lat, lng: anchor.lng }, map: gmap,
-        label: { text: "📍", fontSize: "20px" }, zIndex: 1000 });
-      gAnchorMarker.addListener("click", () => {
-        info2.setContent(`<div style="color:#1a2233"><b>${esc(anchor.label)}</b><br>Your search anchor</div>`);
-        info2.open(gmap, gAnchorMarker);
-      });
-    }
+    drawAnchorCircle();
     fitMap();
     renderMapMarkers();
   };
@@ -1640,7 +1742,7 @@ function searchPills() {
   if ($("smin").value || $("smax").value) pills.push(`${$("smin").value || "?"}–${$("smax").value || "?"} sq ft`);
   if ($("budget").value) pills.push(`≤ $${$("budget").value}/SF/yr`);
   selectedAreas.forEach(k => pills.push(AREA_LOOKUP[k] || k));
-  if (anchor) pills.push(`near ${anchor.label}`);
+  if (anchor) pills.push(anchor.radius_mi ? `within ${anchor.radius_mi} mi of ${anchor.label}` : `near ${anchor.label}`);
   if ($("term").value) pills.push($("term").value === "short" ? "short lease" : "long lease (3+ yrs)");
   if ($("fit").value) pills.push(FIT_LOOKUP[$("fit").value] || $("fit").value);
   if ($("q").value.trim()) pills.push(`“${$("q").value.trim().slice(0, 60)}”`);
