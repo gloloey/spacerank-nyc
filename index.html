@@ -400,6 +400,15 @@ button { font-family:inherit; }
 .topjump .bname { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
 .topjump b { color:var(--ink); font-weight:600; }
 .mapnote { font-size:.72rem; color:var(--ink-faint); margin:-8px 0 16px; display:none; }
+.onboardhint {
+  display:flex; align-items:center; gap:10px; background:var(--blue-soft); color:var(--blue-ink);
+  border:1px solid var(--blue); border-radius:var(--r-sm); padding:9px 13px; margin-bottom:12px; font-size:.82rem;
+}
+.onboardhint button {
+  margin-left:auto; border:none; background:var(--blue); color:#fff; font-weight:700; font-size:.74rem;
+  padding:5px 13px; border-radius:999px; cursor:pointer; flex:none; white-space:nowrap;
+}
+.onboardhint button:hover { filter:brightness(1.08); }
 
 /* ============================== EMPTY / ERROR =========================== */
 .empty { border:1.5px dashed var(--line); border-radius:var(--r); padding:34px 26px; text-align:center; color:var(--ink-soft); font-size:.9rem; line-height:1.6; }
@@ -464,8 +473,8 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
   <a class="brand" href="/">Space<b>Rank</b> NYC</a>
   <span class="freshchip" id="freshchip" hidden><span class="dot"></span><span id="freshtxt"></span></span>
   <span class="sp"></span>
-  <button class="iconbtn" id="darkbtn" title="Toggle dark mode">◐</button>
-  <button class="iconbtn" id="favbtn">♥ Saved <span class="cnt" id="favcnt">0</span></button>
+  <button class="iconbtn" id="darkbtn" title="Toggle dark mode" aria-label="Toggle dark mode">◐</button>
+  <button class="iconbtn" id="favbtn" aria-label="View saved buildings">♥ Saved <span class="cnt" id="favcnt">0</span></button>
 </div></header>
 
 <section class="hero wrap" id="hero">
@@ -543,11 +552,15 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
       <span class="cline" id="countline"></span>
       <span class="sp"></span>
       <button class="abtn" id="sharebtn" data-tt="Copy a link to this exact search — filters, areas and vibe included.">🔗 Share search</button>
-      <button class="abtn" id="drawbtn" hidden data-tt="Click a point on the map, then pick a radius, to search a custom area instead of a named neighborhood.">📐 Draw area</button>
+      <button class="abtn" id="drawbtn" hidden aria-pressed="false" data-tt="Click a point on the map, then pick a radius, to search a custom area instead of a named neighborhood.">📐 Draw area</button>
       <div class="viewtog" id="viewtog">
         <button data-v="list" class="on">☰ List</button>
         <button data-v="map">◎ Map</button>
       </div>
+    </div>
+    <div class="onboardhint" id="drawhint" hidden>
+      📐 <b>New:</b> click <b>Draw area</b> above to search a custom radius instead of picking a named neighborhood.
+      <button type="button" id="drawhintx">Got it</button>
     </div>
     <div class="mapbox" id="bigmap">
       <div id="mapcanvas"></div>
@@ -580,7 +593,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
 
 <div class="drawerback" id="drawerback"></div>
 <aside class="drawer" id="drawer" aria-label="Saved buildings">
-  <h3>Saved buildings <button class="x" id="drawerx">✕</button></h3>
+  <h3>Saved buildings <button class="x" id="drawerx" aria-label="Close saved buildings panel">✕</button></h3>
   <div class="body" id="favlist"></div>
   <div class="dfoot">Saved on this device only. Use "Request intro" on a card to contact the owner.</div>
 </aside>
@@ -883,7 +896,7 @@ function renderChips() {
   const suggestions = currentSuggestions();
   $("q").placeholder = PLACEHOLDER_BY_TYPE[curType] || PLACEHOLDER_BY_TYPE.Office;
   $("chips").innerHTML = suggestions.map((p, i) =>
-    `<button type="button" class="chip" id="chip${i}"><span>${esc(p)}</span><span class="x">✕</span></button>`).join("");
+    `<button type="button" class="chip" id="chip${i}"><span>${esc(p)}</span><span class="x" aria-hidden="true">✕</span></button>`).join("");
   suggestions.forEach((p, i) => $("chip" + i).addEventListener("click", e => {
     e.preventDefault();
     hasPhrase(p) ? removePhrase(p) : addPhrase(p);
@@ -1070,7 +1083,10 @@ function toggleFav(i) {
     toast("Saved ♥ — find it top right");
   }
   saveFavs();
-  document.querySelectorAll(`[data-favkey="${CSS.escape(k)}"]`).forEach(b => b.classList.toggle("on", !!favs[k]));
+  document.querySelectorAll(`[data-favkey="${CSS.escape(k)}"]`).forEach(b => {
+    b.classList.toggle("on", !!favs[k]);
+    b.setAttribute("aria-label", favs[k] ? "Remove from saved" : "Save this building");
+  });
 }
 function renderFavs() {
   const ks = Object.keys(favs);
@@ -1146,6 +1162,17 @@ async function getJSON(url, signal) {
   if (!r.ok) throw new Error(`The server answered ${r.status} — please try again or tweak your filters.`);
   return r.json();
 }
+/* The zero-results suggestion list is dynamic: a drawn-radius anchor is a
+   very plausible reason for an empty search (a tiny circle in the wrong
+   spot), so it gets its own specific tip instead of the generic ones. */
+function joinOr(arr) {
+  return arr.length <= 1 ? (arr[0] || "") : arr.slice(0, -1).join(", ") + ", or " + arr[arr.length - 1];
+}
+function noResultsTips() {
+  const tips = ["removing an area", "widening the size range", "clearing the budget"];
+  if (anchor) tips.push(anchor.radius_mi ? "widening your drawn search radius" : 'removing your "near" point');
+  return joinOr(tips);
+}
 function groupResults(results) {
   const groups = [];
   for (const r of results) {
@@ -1182,7 +1209,7 @@ async function doSearch() {
     if (!allGroups.length) {
       $("spaces").innerHTML = `<div class="empty"><div class="big">🔍</div>
         <b>No available spaces could be ranked for this search.</b><br>
-        Try removing an area, widening the size range, or clearing the budget —
+        Try ${noResultsTips()} —
         the counter on the Search button updates as you do.</div>`;
       $("bigmap").style.display = "none";
     } else {
@@ -1355,8 +1382,9 @@ function groupCard(g, i) {
     <div class="why"><b>Why it's here:</b> ${esc(cleanReason(top.reason))}</div>
     <div class="bact">
       <span class="who">${who}</span>
-      ${mail ? `<button class="copybtn" data-tt="Copy email address" onclick="copyEmail('${mail[1]}')">⧉</button>` : ""}
-      <button class="fav ${favs[k] ? "on" : ""}" data-favkey="${esc(k)}" title="Save" onclick="toggleFav(${i})">♥</button>
+      ${mail ? `<button class="copybtn" data-tt="Copy email address" aria-label="Copy email address" onclick="copyEmail('${mail[1]}')">⧉</button>` : ""}
+      <button class="fav ${favs[k] ? "on" : ""}" data-favkey="${esc(k)}" title="Save"
+        aria-label="${favs[k] ? "Remove from saved" : "Save this building"}" onclick="toggleFav(${i})">♥</button>
       <a class="abtn" href="${top.url}" target="_blank" rel="noopener">Listing ↗</a>
       <button class="abtn primary" onclick="openLead('g', ${i})">Request intro</button>
     </div>
@@ -1383,7 +1411,7 @@ function llcard(r, i) {
   const who = mail
     ? `${esc(r.contact.split("<")[0].trim())} — <a href="mailto:${mail[1]}">${mail[1]}</a>`
     : esc(r.contact || "via landlord site");
-  const copy = mail ? `<button class="copybtn" data-tt="Copy email address" onclick="copyEmail('${mail[1]}')">⧉</button>` : "";
+  const copy = mail ? `<button class="copybtn" data-tt="Copy email address" aria-label="Copy email address" onclick="copyEmail('${mail[1]}')">⧉</button>` : "";
   const spec = r.specialization, str = r.match_strength;
   const specPct = Math.round(100 * spec.score);
   const strPct = str.score === null ? null : Math.round(100 * str.score);
@@ -1427,6 +1455,7 @@ function setView(v) {
   $("showmore").style.display = showMap ? "none" : (allGroups.length > shown ? "block" : "none");
   $("drawbtn").hidden = !showMap;
   if (!showMap) exitDrawMode();
+  else maybeShowDrawHint();
   if (showMap) requestAnimationFrame(() => {
     if (gmap) google.maps.event.trigger(gmap, "resize");
     else if (map) map.invalidateSize();
@@ -1608,9 +1637,21 @@ function locateOnMap(idx) {
    set, which the backend uses to REPLACE its fixed default radius with
    the tenant's own drawn circle (see matching.py's nearest_geo_target). */
 let drawMode = false, anchorCircle = null, gAnchorCircle = null;
+const DRAW_HINT_KEY = "sr_seen_draw_hint";
+function maybeShowDrawHint() {
+  if (localStorage.getItem(DRAW_HINT_KEY)) return;
+  $("drawhint").hidden = false;
+}
+function dismissDrawHint() {
+  localStorage.setItem(DRAW_HINT_KEY, "1");
+  $("drawhint").hidden = true;
+}
+$("drawhintx").addEventListener("click", dismissDrawHint);
 function toggleDrawMode() {
   drawMode = !drawMode;
+  dismissDrawHint();   // trying it once is as good as reading the tip
   $("drawbtn").classList.toggle("on", drawMode);
+  $("drawbtn").setAttribute("aria-pressed", String(drawMode));
   const canvas = $("mapcanvas");
   if (canvas) canvas.style.cursor = drawMode ? "crosshair" : "";
   if (drawMode) toast("Click anywhere on the map to center your search area");
@@ -1618,6 +1659,7 @@ function toggleDrawMode() {
 function exitDrawMode() {
   drawMode = false;
   $("drawbtn").classList.remove("on");
+  $("drawbtn").setAttribute("aria-pressed", "false");
   const canvas = $("mapcanvas");
   if (canvas) canvas.style.cursor = "";
 }
