@@ -372,9 +372,9 @@ button { font-family:inherit; }
 .mapbox { display:none; height:520px; border-radius:var(--r); border:1px solid var(--line); overflow:hidden; box-shadow:var(--shadow-1); margin-bottom:16px; position:relative; z-index:1; }
 #mapcanvas { position:absolute; inset:0; }
 .maplegend {
-  position:absolute; left:12px; bottom:12px; z-index:450; background:var(--card);
+  position:absolute; left:12px; bottom:12px; z-index:450; background:var(--card); max-width:210px;
   border:1px solid var(--line); border-radius:10px; padding:9px 12px; box-shadow:var(--shadow-2);
-  font-size:.72rem; color:var(--ink-soft); line-height:1.9; pointer-events:none;
+  font-size:.72rem; color:var(--ink-soft); line-height:1.7; pointer-events:none;
 }
 .maplegend .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
 .maplegend .sep { border-top:1px solid var(--line2); margin:3px 0; }
@@ -535,6 +535,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
         <div><span class="dot" style="background:#e08700"></span>Lower match (&lt;55)</div>
         <div class="sep"></div>
         <div>📍 your search anchor</div>
+        <div><span class="dot" style="background:#1a2233"></span>dark circle w/ count = grouped pins, click to list</div>
       </div>
     </div>
     <p class="mapnote" id="mapnote"></p>
@@ -1415,6 +1416,99 @@ function popupHtml(g, idx, r) {
     <a href="${r.url}" target="_blank" rel="noopener">listing ↗</a> &nbsp;·&nbsp;
     <a href="javascript:void(0)" onclick="viewOnList(${idx})">view details ↓</a></div>`;
 }
+function clusterPopupHtml(cluster) {
+  const rows = cluster.items.map(({ g, idx }) => {
+    const r = g.spaces[0];
+    return `<div style="margin:5px 0;padding-bottom:5px;border-bottom:1px solid #e2e7f1">
+      <b>${esc(g.building)}</b> — score ${r.score}<br>
+      <a href="javascript:void(0)" onclick="viewOnList(${idx})">view details ↓</a></div>`;
+  }).join("");
+  return `<div style="color:#1a2233;max-height:230px;overflow:auto;min-width:190px">
+    <b>${cluster.items.length} buildings here</b><hr style="margin:5px 0;border-color:#e2e7f1">${rows}</div>`;
+}
+/* ---- from-scratch pin clustering ----------------------------------------
+   Both map providers use the standard 256px-tile Web Mercator convention,
+   so "meters per pixel at this zoom" is one well-known formula regardless
+   of which one is rendering — no need for either provider's own pixel-
+   projection API (Leaflet's container-point conversion, Google's
+   OverlayView projection hack). Convert a target on-screen cluster radius
+   (px) to real-world meters at the map's current zoom/latitude, then do a
+   simple greedy single-pass grouping: each pin joins the first existing
+   cluster whose SEED point it's within that many meters of, else starts
+   a new cluster. Recomputed on every zoom change, since what counts as
+   "close" on screen depends on zoom level. */
+const CLUSTER_PIXEL_RADIUS = 34;
+function metersPerPixel(lat, zoom) {
+  return 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
+}
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
+  const dp = (lat2 - lat1) * Math.PI / 180, dl = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+function clusterPoints(pts, zoom, centerLat) {
+  const radiusM = metersPerPixel(centerLat, zoom) * CLUSTER_PIXEL_RADIUS;
+  const clusters = [];
+  pts.forEach(pt => {
+    const r = pt.g.spaces[0];
+    const home = clusters.find(c => haversineMeters(r.lat, r.lng, c.seedLat, c.seedLng) <= radiusM);
+    if (home) home.items.push(pt);
+    else clusters.push({ seedLat: r.lat, seedLng: r.lng, items: [pt] });
+  });
+  return clusters.map(c => ({
+    items: c.items,
+    lat: c.items.reduce((s, { g }) => s + g.spaces[0].lat, 0) / c.items.length,
+    lng: c.items.reduce((s, { g }) => s + g.spaces[0].lng, 0) / c.items.length,
+  }));
+}
+function renderMapMarkers() {
+  if (!mapPts.length) return;
+  const zoom = gmap ? gmap.getZoom() : map.getZoom();
+  const c0 = gmap ? gmap.getCenter() : map.getCenter();
+  const centerLat = gmap ? c0.lat() : c0.lat;
+  const clusters = clusterPoints(mapPts, zoom, centerLat);
+  if (gmap) return renderGoogleMarkers(clusters);
+  markerLayer.clearLayers();
+  clusters.forEach(c => {
+    if (c.items.length === 1) {
+      const { g, idx } = c.items[0], r = g.spaces[0];
+      const col = r.score >= 75 ? "#0d9f8a" : r.score >= 55 ? "#2456e6" : "#e08700";
+      const icon = L.divIcon({ className: "", iconSize: [30, 30],
+        html: `<div style="background:${col};color:#fff;font-weight:700;border-radius:50%;width:30px;height:30px;
+          text-align:center;line-height:30px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.4);border:2px solid #fff">${idx + 1}</div>` });
+      L.marker([r.lat, r.lng], { icon }).bindPopup(popupHtml(g, idx, r)).addTo(markerLayer);
+    } else {
+      const n = c.items.length, size = Math.min(30 + n * 2, 54);
+      const icon = L.divIcon({ className: "", iconSize: [size, size],
+        html: `<div style="background:#1a2233;color:#fff;font-weight:800;border-radius:50%;width:${size}px;height:${size}px;
+          text-align:center;line-height:${size}px;font-size:13px;box-shadow:0 2px 10px rgba(0,0,0,.45);border:2.5px solid #fff">${n}</div>` });
+      L.marker([c.lat, c.lng], { icon }).bindPopup(clusterPopupHtml(c)).addTo(markerLayer);
+    }
+  });
+}
+function renderGoogleMarkers(clusters) {
+  gMarkers.forEach(m => m.setMap(null)); gMarkers = [];
+  const info = new google.maps.InfoWindow();
+  clusters.forEach(c => {
+    if (c.items.length === 1) {
+      const { g, idx } = c.items[0], r = g.spaces[0];
+      const m = new google.maps.Marker({ position: { lat: r.lat, lng: r.lng }, map: gmap,
+        label: { text: String(idx + 1), color: "#fff", fontWeight: "700" } });
+      m.addListener("click", () => { info.setContent(popupHtml(g, idx, r)); info.open(gmap, m); });
+      gMarkers.push(m);
+    } else {
+      const n = c.items.length;
+      const m = new google.maps.Marker({ position: { lat: c.lat, lng: c.lng }, map: gmap,
+        icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: "#1a2233", fillOpacity: 1,
+                strokeColor: "#fff", strokeWeight: 2, scale: 15 + Math.min(n, 12) },
+        label: { text: String(n), color: "#fff", fontWeight: "800", fontSize: "13px" } });
+      m.addListener("click", () => { info.setContent(clusterPopupHtml(c)); info.open(gmap, m); });
+      gMarkers.push(m);
+    }
+  });
+}
 function drawMap(groups) {
   mapPts = groups.map((g, idx) => ({ g, idx })).filter(o => o.g.spaces[0].lat && o.g.spaces[0].lng);
   if (GMAPS_KEY) return drawGoogleMap();
@@ -1426,18 +1520,8 @@ function drawMap(groups) {
       maxZoom: 20, subdomains: "abcd",
     }).addTo(map);
     markerLayer = L.layerGroup().addTo(map);
+    map.on("zoomend", renderMapMarkers);
   }
-  markerLayer.clearLayers();
-  mapPts.forEach(({ g, idx }) => {
-    const r = g.spaces[0];
-    const col = r.score >= 75 ? "#0d9f8a" : r.score >= 55 ? "#2456e6" : "#e08700";
-    const icon = L.divIcon({ className: "", iconSize: [30, 30],
-      html: `<div style="background:${col};color:#fff;font-weight:700;border-radius:50%;width:30px;height:30px;
-        text-align:center;line-height:30px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.4);border:2px solid #fff">${idx + 1}</div>` });
-    L.marker([r.lat, r.lng], { icon })
-      .bindPopup(popupHtml(g, idx, r))
-      .addTo(markerLayer);
-  });
   if (anchorMarker) { map.removeLayer(anchorMarker); anchorMarker = null; }
   if (anchor) {
     const aIcon = L.divIcon({ className: "", iconSize: [30, 38], iconAnchor: [15, 36],
@@ -1447,6 +1531,7 @@ function drawMap(groups) {
       .addTo(map);
   }
   fitMap();
+  renderMapMarkers();
 }
 function fitMap() {
   if (!mapPts.length) return;
@@ -1464,28 +1549,20 @@ function drawGoogleMap() {
     if (!gmap) {
       gmap = new google.maps.Map($("mapcanvas"), { center: { lat: 40.75, lng: -73.98 }, zoom: 13, mapTypeControl: false });
       new google.maps.TransitLayer().setMap(gmap);
+      gmap.addListener("zoom_changed", renderMapMarkers);
     }
-    gMarkers.forEach(m => m.setMap(null)); gMarkers = [];
-    const info = new google.maps.InfoWindow();
-    mapPts.forEach(({ g, idx }) => {
-      const r = g.spaces[0];
-      const m = new google.maps.Marker({ position: { lat: r.lat, lng: r.lng }, map: gmap, label: { text: String(idx + 1), color: "#fff", fontWeight: "700" } });
-      m.addListener("click", () => {
-        info.setContent(popupHtml(g, idx, r));
-        info.open(gmap, m);
-      });
-      gMarkers.push(m);
-    });
     if (gAnchorMarker) { gAnchorMarker.setMap(null); gAnchorMarker = null; }
     if (anchor) {
+      const info2 = new google.maps.InfoWindow();
       gAnchorMarker = new google.maps.Marker({ position: { lat: anchor.lat, lng: anchor.lng }, map: gmap,
         label: { text: "📍", fontSize: "20px" }, zIndex: 1000 });
       gAnchorMarker.addListener("click", () => {
-        info.setContent(`<div style="color:#1a2233"><b>${esc(anchor.label)}</b><br>Your search anchor</div>`);
-        info.open(gmap, gAnchorMarker);
+        info2.setContent(`<div style="color:#1a2233"><b>${esc(anchor.label)}</b><br>Your search anchor</div>`);
+        info2.open(gmap, gAnchorMarker);
       });
     }
     fitMap();
+    renderMapMarkers();
   };
   if (window.google && google.maps) render();
   else {
