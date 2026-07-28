@@ -12,9 +12,9 @@ import os
 import pandas as pd
 
 from landlord import rank_landlords
-from matching import (LANDLORD_PROFILES, TenantRequest, haversine_km,
-                      nearest_geo_target, rank_spaces, score_budget,
-                      score_geo, score_size, score_type,
+from matching import (COUNT_AREA_RADIUS_MI, LANDLORD_PROFILES, TenantRequest,
+                      haversine_mi, nearest_geo_target, rank_spaces,
+                      score_budget, score_geo, score_size, score_type,
                       search_subway_stations)
 
 # The real landlord roster is whatever's in the scraped dataset — NOT
@@ -52,10 +52,25 @@ def test_budget_neutral_for_unknown_rent():
 
 
 def test_haversine_known_distance():
-    # Times Square -> SoHo is about 4 km as the crow flies
-    d = haversine_km(40.7580, -73.9855, 40.7230, -74.0000)
-    assert 3.5 < d < 4.5
-    assert haversine_km(40.7, -74.0, 40.7, -74.0) == 0.0
+    # Times Square -> SoHo is about 2.5 mi as the crow flies
+    d = haversine_mi(40.7580, -73.9855, 40.7230, -74.0000)
+    assert 2.2 < d < 2.8
+    assert haversine_mi(40.7, -74.0, 40.7, -74.0) == 0.0
+
+
+def test_area_radius_is_neighborhood_scale_not_borough_scale():
+    """DESIGN DECISION: the 'inside area' hard-filter radius must be small
+    enough that adjacent Midtown submarkets don't all count as the same
+    area. Times Square and Grand Central are two distinct submarkets only
+    ~0.66 mi apart (as centroid-to-centroid distance) — a radius as large as
+    that gap would make a Grand Central building also count as "inside"
+    Times Square, and vice versa. The radius must be smaller than that gap."""
+    from matching import AREAS
+    d = haversine_mi(*AREAS["times square & theater district"],
+                     *AREAS["grand central & murray hill"])
+    assert COUNT_AREA_RADIUS_MI < d
+    # and it's a real neighborhood scale, not a borough-sized catchment
+    assert COUNT_AREA_RADIUS_MI <= 0.75
 
 
 def test_geo_neutral_when_ungeocode():

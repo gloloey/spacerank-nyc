@@ -11,7 +11,7 @@ THE THREE SIGNALS
 -----------------
 1. match_number   COUNT of available spaces passing the hard filters
                   (type strict; size strict when given; budget rejects only
-                  KNOWN rents above budget; area strict within 2 km of any
+                  KNOWN rents above budget; area strict within 0.5 mi of any
                   selected submarket, un-geocoded fails).
 2. specialization (X/Y) x (X/(X+DAMP)) — share of their portfolio in the
                   tenant's area+type, damped by absolute count.
@@ -32,7 +32,13 @@ from matching import (AREA_LABELS, AREAS, LANDLORD_PROFILES, STYLE_LABELS,
 
 ORDER_WEIGHTS = {"match_number": 0.40, "specialization": 0.25, "match_strength": 0.35}
 STRENGTH_WEIGHTS = {"size": 0.25, "budget": 0.15, "geo": 0.30, "semantic": 0.30}
-AREA_RADIUS_KM = 2.0
+# 0.5 mi ~ real NYC neighborhood scale. Must match matching.COUNT_AREA_RADIUS_MI
+# (one truth, two uses, same as passes_hard_filters mirroring count_spaces) —
+# the old 2 km (1.24 mi) radius was big enough that most adjacent Midtown
+# submarkets (e.g. Times Square <-> Grand Central, ~0.66 mi apart) fully
+# bled into each other; verified by hand against the real dataset before
+# picking 0.5 mi (see HANDOFF.md for the before/after overlap counts).
+AREA_RADIUS_MI = 0.5
 DAMP = 5
 SATURATION = 10
 MATCH_TOP = 3
@@ -40,7 +46,7 @@ STYLE_ORDER_BONUS = 0.04
 
 
 def _in_area(space, req):
-    """Within AREA_RADIUS_KM of ANY selected submarket OR the custom anchor
+    """Within AREA_RADIUS_MI of ANY selected submarket OR the custom anchor
     point. Unknown coords fail (we never claim a location we can't verify).
     No areas and no anchor -> True."""
     if not req.areas and not req.anchor:
@@ -49,7 +55,7 @@ def _in_area(space, req):
     if lat is None or lng is None:
         return False
     d, _ = nearest_geo_target(lat, lng, req.areas, req.anchor)
-    return d is not None and d <= AREA_RADIUS_KM
+    return d is not None and d <= AREA_RADIUS_MI
 
 
 def passes_hard_filters(space, req):

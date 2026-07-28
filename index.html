@@ -1190,7 +1190,7 @@ function cleanReason(txt) {
     if (!used.size   && /size target|no size/.test(s)) return false;
     if (!used.budget && /budget/.test(s)) return false;
     if (!used.vibe   && /description match/.test(s)) return false;
-    if (!used.geo    && /(km from|no area)/.test(s)) return false;
+    if (!used.geo    && /(mi from|no area)/.test(s)) return false;
     return p.trim() !== "";
   });
   const out = parts.join("; ");
@@ -1219,7 +1219,7 @@ function groupCard(g, i) {
           ${top.year_built ? `<span class="mchip">built ${top.year_built}</span>` : ""}
           <span class="mchip">${esc(top.borough)}</span>
           ${top.fit_condition ? `<span class="mchip fit" data-tt="Parsed from this listing's own description text.">${esc(FIT_LOOKUP[top.fit_condition] || top.fit_condition)}</span>` : ""}
-          ${top.anchor_distance_km != null ? `<span class="mchip anchor ttd" data-tt="Straight-line distance to ${esc(top.anchor_label)}, the place you searched near.">📍 ${top.anchor_distance_km.toFixed(1)} km from ${esc(top.anchor_label)}</span>` : ""}
+          ${top.anchor_distance_mi != null ? `<span class="mchip anchor ttd" data-tt="Straight-line distance to ${esc(top.anchor_label)}, the place you searched near.">📍 ${top.anchor_distance_mi.toFixed(1)} mi from ${esc(top.anchor_label)}</span>` : ""}
         </div>
         ${signalBars(top.signals, top)}
       </div>

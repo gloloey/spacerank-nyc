@@ -90,7 +90,8 @@ STYLE_LABELS = {"institutional": "Institutional (public REIT)",
 
 # ---------------------------------------------------------------------------
 # AREAS: NYC office SUBMARKETS at consistent granularity (CBRE/JLL-style
-# districts, ~1-2 km each). Keys are lowercase ids; AREA_LABELS holds display
+# districts, ~0.3-0.6 mi radius each — real NYC neighborhood scale, not a
+# borough-sized area). Keys are lowercase ids; AREA_LABELS holds display
 # names; AREA_GROUPS drives the grouped picker in the UI.
 # ---------------------------------------------------------------------------
 AREAS = {
@@ -304,9 +305,9 @@ def score_budget(rent_psf, budget):
     return max(0.0, 1 - 2 * overage), f"${rent_psf:.0f}/SF over budget"
 
 
-def haversine_km(lat1, lng1, lat2, lng2):
-    """Great-circle distance between two points on Earth, in km."""
-    r = 6371.0
+def haversine_mi(lat1, lng1, lat2, lng2):
+    """Great-circle distance between two points on Earth, in miles."""
+    r = 3958.8
     p1, p2 = math.radians(lat1), math.radians(lat2)
     dp, dl = math.radians(lat2 - lat1), math.radians(lng2 - lng1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
@@ -314,7 +315,7 @@ def haversine_km(lat1, lng1, lat2, lng2):
 
 
 def nearest_geo_target(lat, lng, area_keys, anchor=None):
-    """(distance_km, label) of the closest point among the tenant's chosen
+    """(distance_mi, label) of the closest point among the tenant's chosen
     areas AND their custom anchor (a subway station or geocoded address),
     pooled together — a tenant near either "SoHo" or "my other office" is
     a fit. (None, None) if neither areas nor an anchor were given."""
@@ -323,11 +324,11 @@ def nearest_geo_target(lat, lng, area_keys, anchor=None):
     best = None
     for k in area_keys:
         c = AREAS[k]
-        d = haversine_km(lat, lng, c[0], c[1])
+        d = haversine_mi(lat, lng, c[0], c[1])
         if best is None or d < best[0]:
             best = (d, AREA_LABELS[k])
     if anchor:
-        d = haversine_km(lat, lng, anchor["lat"], anchor["lng"])
+        d = haversine_mi(lat, lng, anchor["lat"], anchor["lng"])
         if best is None or d < best[0]:
             best = (d, anchor["label"])
     return best if best else (None, None)
@@ -335,15 +336,15 @@ def nearest_geo_target(lat, lng, area_keys, anchor=None):
 
 def score_geo(lat, lng, area_keys, anchor=None):
     """Distance to the NEAREST selected area OR custom anchor point: 1.0
-    within 0.5 km, fading to 0 at 8 km. Several candidates = several
+    within 0.3 mi, fading to 0 at 5 mi. Several candidates = several
     acceptable centers, the closest one counts."""
     if not area_keys and not anchor:
         return 0.5, "no area requested", None
     d, label = nearest_geo_target(lat, lng, area_keys, anchor)
     if d is None:
         return 0.5, "location unknown", None
-    score = 1.0 if d <= 0.5 else max(0.0, 1 - (d - 0.5) / 7.5)
-    return score, f"{d:.1f} km from {label}", d
+    score = 1.0 if d <= 0.3 else max(0.0, 1 - (d - 0.3) / 4.7)
+    return score, f"{d:.1f} mi from {label}", d
 
 
 # ---------------------------------------------------------------------------
@@ -370,7 +371,11 @@ def _n(v):
     return None if v is None or v != v else v
 
 
-COUNT_AREA_RADIUS_KM = 2.0    # same hard-filter radius the landlord layer uses
+COUNT_AREA_RADIUS_MI = 0.5    # same hard-filter radius the landlord layer uses
+                              # (see NYC_NEIGHBORHOOD_RADIUS note in landlord.py:
+                              #  ~0.5 mi is real NYC neighborhood scale — the old
+                              #  2 km/1.24 mi radius was large enough that most
+                              #  adjacent Midtown submarkets bled into each other)
 
 
 def count_spaces(req: TenantRequest, csv_path: str | None = None):
@@ -381,7 +386,7 @@ def count_spaces(req: TenantRequest, csv_path: str | None = None):
       type    strict (exact match only)
       size    within range, when a range is given
       budget  rejects only KNOWN rents above budget ("Upon request" passes)
-      area    within 2 km of ANY selected submarket OR the custom anchor
+      area    within 0.5 mi of ANY selected submarket OR the custom anchor
               point, if either was given; un-geocoded spaces fail
     The free-text description, landlord style, fit preference, and term
     are RANKING inputs, not filters — they never change this number
@@ -413,7 +418,7 @@ def count_spaces(req: TenantRequest, csv_path: str | None = None):
             if lat is None or lng is None:
                 continue
             d, _label = nearest_geo_target(lat, lng, req.areas, req.anchor)
-            if d is None or d > COUNT_AREA_RADIUS_KM:
+            if d is None or d > COUNT_AREA_RADIUS_MI:
                 continue
         n += 1
         ll = _s(row["landlord"])
@@ -467,11 +472,11 @@ def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None)
         # distance to the tenant's custom anchor point (a subway station or
         # geocoded address) — shown ALWAYS when an anchor is set, regardless
         # of whether it happened to be the nearest candidate for scoring
-        anchor_km = anchor_label = None
+        anchor_mi = anchor_label = None
         if req.anchor:
             lat_v, lng_v = _n(row["lat"]), _n(row["lng"])
             if lat_v is not None and lng_v is not None:
-                anchor_km = round(haversine_km(lat_v, lng_v, req.anchor["lat"], req.anchor["lng"]), 2)
+                anchor_mi = round(haversine_mi(lat_v, lng_v, req.anchor["lat"], req.anchor["lng"]), 2)
             anchor_label = req.anchor["label"]
 
         slug = _s(row["source_url"]).rstrip("/").split("/")[-1]
@@ -500,7 +505,7 @@ def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None)
             "signals": {"type": s_type, "size": s_size, "budget": s_budg,
                         "geo": s_geo, "semantic": round(sem, 3)},
             "fit_condition": fit,
-            "anchor_distance_km": anchor_km,
+            "anchor_distance_mi": anchor_mi,
             "anchor_label": anchor_label,
             # RULE 1 (price_model.py): estimates are informational only.
             # They exist ONLY for display on unknown-rent spaces — scoring
