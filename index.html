@@ -386,9 +386,14 @@ button { font-family:inherit; }
 }
 .maplegend .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
 .maplegend .sep { border-top:1px solid var(--line2); margin:3px 0; }
+/* pointer-events:none on the PANEL, :auto on its buttons — otherwise the
+   panel's own background/padding (not just its buttons) silently eats
+   map clicks anywhere under its bounding box, including draw-radius
+   clicks meant for the map underneath. Same treatment on .mapradius below. */
 .topjump {
   position:absolute; right:12px; top:12px; z-index:450; background:var(--card); max-width:230px;
   border:1px solid var(--line); border-radius:10px; padding:9px 10px; box-shadow:var(--shadow-2); font-size:.74rem;
+  pointer-events:none;
 }
 .topjump .hd { font-weight:700; color:var(--ink); margin-bottom:4px; }
 .topjump button {
@@ -399,6 +404,19 @@ button { font-family:inherit; }
 .topjump .rk { font-weight:800; color:var(--ink); min-width:20px; }
 .topjump .bname { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
 .topjump b { color:var(--ink); font-weight:600; }
+.mapradius {
+  position:absolute; right:12px; bottom:12px; z-index:450; background:var(--card); max-width:230px;
+  border:1px solid var(--line); border-radius:10px; padding:9px 10px; box-shadow:var(--shadow-2); font-size:.74rem;
+  pointer-events:none;
+}
+.mapradius .hd { font-weight:700; color:var(--ink); margin-bottom:6px; }
+.mapradius .chips { display:flex; gap:6px; flex-wrap:wrap; }
+.mapradius button {
+  border:1px solid var(--line); background:var(--card2); color:var(--ink-soft); font-size:.72rem; font-weight:600;
+  padding:4px 10px; border-radius:999px; cursor:pointer; transition:all .13s; pointer-events:auto;
+}
+.mapradius button.on { background:var(--blue); color:#fff; border-color:var(--blue); }
+.mapradius button:hover:not(.on) { border-color:var(--blue); color:var(--blue); }
 .mapnote { font-size:.72rem; color:var(--ink-faint); margin:-8px 0 16px; display:none; }
 .onboardhint {
   display:flex; align-items:center; gap:10px; background:var(--blue-soft); color:var(--blue-ink);
@@ -565,6 +583,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
     <div class="mapbox" id="bigmap">
       <div id="mapcanvas"></div>
       <div class="topjump" id="topjump"></div>
+      <div class="mapradius" id="mapradius" hidden></div>
       <div class="maplegend">
         <div><span class="dot" style="background:#0d9f8a"></span>Strong match (75+)</div>
         <div><span class="dot" style="background:#2456e6"></span>Good match (55–74)</div>
@@ -756,9 +775,12 @@ function renderAnchorChip() {
   row.innerHTML = html;
   $("anchorclear").addEventListener("click", () => { setAnchor(null); exitDrawMode(); });
   if (anchor.radius_mi) {
-    row.querySelectorAll(".radiuspicker button").forEach(b => b.addEventListener("click", () =>
-      setAnchor({ ...anchor, radius_mi: +b.dataset.r })));
+    row.querySelectorAll(".radiuspicker button").forEach(b => b.addEventListener("click", () => {
+      setAnchor({ ...anchor, radius_mi: +b.dataset.r });
+      frameAnchorCircle();
+    }));
   }
+  renderMapRadiusControl();
 }
 function setAnchor(a) {
   anchor = a;
@@ -1588,8 +1610,14 @@ function renderGoogleMarkers(clusters) {
   clusters.forEach(c => {
     if (c.items.length === 1) {
       const { g, idx } = c.items[0], r = g.spaces[0];
+      // color-coded by score tier, same as the Leaflet path — a plain
+      // default red pin would lose the "strong/good/lower match" signal
+      // the legend and Leaflet markers both rely on.
+      const col = r.score >= 75 ? "#0d9f8a" : r.score >= 55 ? "#2456e6" : "#e08700";
       const m = new google.maps.Marker({ position: { lat: r.lat, lng: r.lng }, map: gmap,
-        label: { text: String(idx + 1), color: "#fff", fontWeight: "700" } });
+        icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: col, fillOpacity: 1,
+                strokeColor: "#fff", strokeWeight: 2, scale: 15 },
+        label: { text: String(idx + 1), color: "#fff", fontWeight: "700", fontSize: "12px" } });
       m.addListener("click", () => { info.setContent(popupHtml(g, idx, r)); info.open(gmap, m); });
       gMarkers.push(m);
     } else {
@@ -1667,6 +1695,47 @@ function handleMapDrawClick(lat, lng) {
   if (!drawMode) return;
   setAnchor({ label: "your drawn area", lat, lng, radius_mi: (anchor && anchor.radius_mi) || 0.5 });
   exitDrawMode();
+  // BUG this fixes: at whatever zoom the map happened to be showing all
+  // search results (often zoomed out across NYC), a fresh 0.5 mi circle
+  // renders as a near-invisible dot — nothing on screen looked like it
+  // had changed. Snap/animate the view straight to the new circle so
+  // placing it is unmistakable, not just technically-correct-but-silent.
+  frameAnchorCircle();
+  toast("📐 Search area set — pick a radius below or on the map");
+}
+/* Zoom/pan tightly to the anchor's OWN drawn circle (not the whole
+   result set fitMap() frames) — called right after placing it and after
+   every radius change, since neither of those otherwise moves the view
+   at all. */
+function frameAnchorCircle() {
+  if (!anchor) return;
+  const r = anchor.radius_mi || 0.15;
+  const dLat = r / 69;
+  const dLng = r / (69 * Math.cos(anchor.lat * Math.PI / 180));
+  const bounds = [[anchor.lat + dLat, anchor.lng - dLng], [anchor.lat - dLat, anchor.lng + dLng]];
+  if (gmap) {
+    const b = new google.maps.LatLngBounds();
+    bounds.forEach(([la, ln]) => b.extend({ lat: la, lng: ln }));
+    gmap.fitBounds(b, 60);
+  } else if (map) {
+    map.flyToBounds(bounds, { padding: [70, 70], maxZoom: 16, duration: 0.6 });
+  }
+}
+/* On-map floating radius control (bottom-right) — mirrors the sidebar
+   picker exactly, so adjusting the radius doesn't require looking away
+   from the map to find the sidebar control. */
+function renderMapRadiusControl() {
+  const box = $("mapradius");
+  if (!box) return;
+  if (!anchor || !anchor.radius_mi) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  box.innerHTML = `<div class="hd">📐 Search radius</div><div class="chips">` +
+    RADIUS_PRESETS.map(r => `<button type="button" class="${r === anchor.radius_mi ? "on" : ""}" data-r="${r}">${r} mi</button>`).join("") +
+    `</div>`;
+  box.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    setAnchor({ ...anchor, radius_mi: +b.dataset.r });
+    frameAnchorCircle();
+  }));
 }
 /* Single place that keeps the anchor PIN and (if a radius is set) the
    CIRCLE in sync on whichever map provider is active — called immediately
@@ -1692,7 +1761,7 @@ function drawAnchorCircle() {
       // otherwise Leaflet's default click-stops-propagation behavior for
       // Path layers would silently swallow re-draw clicks inside it.
       anchorCircle = L.circle([anchor.lat, anchor.lng], {
-        radius: radiusMeters, color: "#2456e6", weight: 2, fillColor: "#2456e6", fillOpacity: 0.08,
+        radius: radiusMeters, color: "#2456e6", weight: 3, fillColor: "#2456e6", fillOpacity: 0.14,
         interactive: false,
       }).addTo(map);
     }
@@ -1712,7 +1781,7 @@ function drawAnchorCircle() {
     if (radiusMeters) {
       gAnchorCircle = new google.maps.Circle({
         center: { lat: anchor.lat, lng: anchor.lng }, radius: radiusMeters, map: gmap,
-        strokeColor: "#2456e6", strokeWeight: 2, fillColor: "#2456e6", fillOpacity: 0.08,
+        strokeColor: "#2456e6", strokeWeight: 3, fillColor: "#2456e6", fillOpacity: 0.14,
         clickable: false,
       });
     }
