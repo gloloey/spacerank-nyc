@@ -1,262 +1,400 @@
 # SpaceRank NYC
 
-A commercial real-estate matching engine for New York City. A tenant describes
-what they want (type, size, budget, area, free-text description) and the system
-returns the best-fitting spaces — each with a 0-100 score, the reason it
-surfaced, and a direct ownership-side leasing contact.
+**A commercial real-estate matching engine for New York City — live at [spacerank-nyc.vercel.app](https://spacerank-nyc.vercel.app)**
 
-## Pipeline (run in this order)
+[![Tests](https://img.shields.io/badge/tests-33%20passing-brightgreen)](test_engine.py)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](requirements.txt)
+[![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+[![Data refresh](https://img.shields.io/badge/data-refreshed%20weekly-informational)](.github/workflows/refresh_data.yml)
 
+A tenant describes what they need — space type, size, budget, neighborhood,
+a sentence in plain English — and SpaceRank ranks every available office
+space in the dataset (0–100, five explained signals) and the landlords
+behind them (three transparent signals), with a direct ownership-side
+leasing contact for each result. No brokers, no invented numbers, no
+black-box score.
+
+Built solo, end to end: 17 landlord scrapers, a data-cleaning + enrichment
+pipeline, a from-scratch matching engine, a semantic-search layer with a
+three-tier fallback chain, a closed-form rent-estimation model, a FastAPI
+backend, a single-file no-framework frontend, and a weekly GitHub Actions
+pipeline that keeps the whole thing self-updating in production.
+
+**Current dataset: 1,123 rows · 1,013 available spaces · 270 buildings · 17 landlords · 100% geocoded**
+
+<p align="center">
+  <img src="docs/screenshots/results-view.png" alt="Ranked results — score rings, per-signal bars, ownership-side contacts" width="90%">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/map-view.png" alt="Map view — score-colored numbered pins" width="45%">
+  <img src="docs/screenshots/landlord-panel.png" alt="Landlord ranking — three transparent signals, no combined score" width="45%">
+</p>
+
+---
+
+## Why this project exists
+
+Every real listing platform either hides its scoring, buries you in broker
+noise, or both. This one is the opposite bet: **every number is real and
+every score is explainable.** If a value is unknown, it shows as "—" and
+scores neutral — never a guess dressed up as data. That rule is enforced by
+tests, not just convention (see [Honest-data rules](#honest-data-rules-enforced-by-tests)
+below).
+
+It also exists to be **explainable line-by-line in an interview.** There's
+no framework magic and no unexamined dependency: the semantic-search
+fallback is hand-written TF-IDF, the rent model is closed-form ridge
+regression in raw numpy, and the frontend is one HTML file with no build
+step. Every design decision below has a documented reason.
+
+## Highlights (the parts worth a closer look)
+
+- **A five-signal ranking engine that explains itself** — every result
+  carries its per-signal scores *and* a plain-English reason string.
+  [`matching.py`](matching.py)
+- **A three-tier semantic search backend** that degrades gracefully:
+  local sentence-transformers → precomputed embeddings + quantized ONNX
+  MiniLM (the deployed path, no PyTorch, no GPU) → from-scratch TF-IDF as
+  a last resort — and the API always discloses which one answered your
+  query. [`semantic.py`](semantic.py)
+- **A rent-estimation model built from first principles**: closed-form
+  ridge regression (`w = (XᵀX + λI)⁻¹Xᵀy`, plain numpy), λ chosen by
+  leave-one-out cross-validation, predictions gated to a verified training
+  envelope, shipped as a range from real LOO residuals — and it refuses to
+  publish anything when it doesn't have enough data to be honest.
+  [`price_model.py`](price_model.py)
+- **A landlord-ranking layer with no combined score** — three signals
+  (fit count, area/type specialization, match quality) shown separately
+  because a single blended "landlord score" would hide more than it
+  revealed. [`landlord.py`](landlord.py)
+- **A self-updating production pipeline**: a GitHub Action re-scrapes all
+  17 landlords weekly, rebuilds the dataset, retrains the rent model,
+  refuses to commit if any landlord's listings collapse by >50% (a scraper
+  breaking silently is worse than it breaking loudly), then chains into a
+  second Action that re-embeds descriptions and deploys — with zero manual
+  steps between a landlord redesigning their site and the fix shipping.
+- **17 real-world scrapers**, each written against a different site
+  architecture (JSON APIs, server-rendered Drupal, WordPress with
+  lazy-loaded images, paginated tables) — see [Scraper notes](#scraper-notes-one-site-one-architecture).
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Offline Pipeline
+        A["17× scrape_*.py<br/>(requests + BeautifulSoup)"] --> B["*_listings.csv<br/>(raw, one per landlord)"]
+        B --> C["clean_dataset.py<br/>merge · rent parsing · PLUTO join · geocoding"]
+        C --> D["spaces_clean.csv<br/>+ dataset_meta.json"]
+        D --> E["price_model.py<br/>ridge regression, LOO CV"]
+        E --> F["price_model.json"]
+        D --> G["tools/precompute_embeddings.py"]
+        G --> H["embeddings.npz<br/>+ models/ (ONNX + tokenizer)"]
+    end
+
+    subgraph Runtime — Vercel serverless
+        D --> I["matching.py<br/>5-signal engine"]
+        F --> I
+        H --> J["semantic.py<br/>3-tier backend"]
+        J --> I
+        I --> K["landlord.py<br/>3-signal layer"]
+        I --> L["app.py — FastAPI"]
+        K --> L
+        L --> M["index.html<br/>single-file frontend"]
+    end
+
+    N["GitHub Actions:<br/>refresh_data.yml (weekly)"] -.rebuilds.-> B
+    N -.dispatches.-> O["embeddings.yml"]
+    O -.commits & triggers deploy.-> H
 ```
-python scrape_gfp.py         # 1a. scrape GFP Real Estate   -> gfp_listings.csv
-python scrape_rudin.py       # 1b. scrape Rudin Management   -> rudin_listings.csv
-python scrape_slgreen.py     # 1c. scrape SL Green           -> slgreen_listings.csv
-python clean_dataset.py      # 2.  merge + PLUTO enrichment  -> spaces_clean.csv
-python demo_match.py         # 3.  rank spaces for example tenant requests
-python test_engine.py        # 4.  9 design-decision tests must pass
-python -m uvicorn app:app    # 5.  full product at http://127.0.0.1:8000
-```
 
-Requires: `python -m pip install -r requirements.txt`
-Optional (real semantic matching): `python -m pip install sentence-transformers`
+## Tech stack
 
-## The files
-
-| File | What it does |
-|---|---|
-| `scrape_gfp.py` | Scraper for gfpre.com. Hybrid: one call to their JSON API (`/api/property`) for all 59 buildings + 135 availabilities, then BeautifulSoup on each building page for the description + contacts (which ARE in the raw HTML — the availabilities table is not, it's JS-rendered from that API). |
-| `gfp_listings.csv` | Raw scrape output. One row per available space; buildings with no availabilities keep one row with space fields blank. |
-| `building_coords.json` | `slug -> [lng, lat]` for every building, taken from the same API (`mapbox_center`) — saved a whole geocoding step. |
-| `clean_dataset.py` | Data engineering: parses `"$40.00 PSF"` -> `40.0` (never guesses when rent is "Upon request"), flags leased/placeholder rows, tags residential buildings, assigns boroughs, merges coordinates, and **joins NYC PLUTO by normalized address** (never by owner name — 95.2% of PLUTO owner strings own exactly one building). PLUTO supplies lat/lng where scrapers can't, plus year built / floors / building class. Address normalization handles PLUTO's format: "Eighth Avenue" -> "8 AVENUE", "53rd" -> "53", "One" -> "1". 57/101 buildings match; misses are mostly corner lots keyed by their other frontage (fix would be the NYC GeoSearch API — future work). |
-| `spaces_clean.csv` | The engine's input. 457 rows across 3 landlords (101 buildings), 406 flagged `is_available`, enriched with PLUTO year built / floors / building class. |
-| `semantic.py` | The "match by meaning" layer. Uses sentence-transformers embeddings + cosine similarity when installed; otherwise falls back to a from-scratch TF-IDF (keyword-weight) implementation so the pipeline always runs. |
-| `matching.py` | The engine. Five signals, each 0..1: type, size, budget, geo (haversine distance to the requested area), semantic. Blended with explicit weights into one score. |
-| `demo_match.py` | Three realistic tenant personas run end-to-end. |
-| `scrape_rudin.py` | Scraper for rudin.com — the OPPOSITE architecture of GFP: fully server-rendered Drupal pages (paginated `/all-availabilities`), but no public emails (contact recorded honestly as the inquire-form link) and no rents. Building coordinates are embedded in each page (highest-precision pair = the map pin; the 6-decimal pair is their HQ footer map). |
-| `landlord.py` | Layer 3 (v2) — ranks landlords on exactly THREE transparent signals (see 'How the landlord ranking works' below). No combined score is displayed; every number traces to real data. |
-| `app.py` | FastAPI wrapper: `/api/match`, `/api/landlords`, `/api/areas`, auto-docs at `/docs`, serves the UI at `/`. |
-| `static/index.html` | The tenant-facing single-file frontend: search form, ranked space cards with per-signal score bars, landlord panel, and a Leaflet results map with numbered pins. |
-| `scrape_slgreen.py` | Scraper for slgreen.com (landlord #3, WordPress/Divi) — the richest source: 224 units with rent/term/occupancy, real @slgreen.com leasing contacts (C&W brokers filtered out per the ownership-side rule). Quirks: units render 3x (desktop/mobile/details) and must be deduped; ~35 of the 66 dropdown entries are external marketing sites and are skipped; no coordinates (PLUTO supplies them). |
-| `tools/precompute_embeddings.py` | The offline half of the embedding backend: embeds every description with fp32 MiniLM, writes `embeddings.npz`, fetches the quantized ONNX export + tokenizer into `models/`. Run by CI or locally. |
-| `.github/workflows/embeddings.yml` | GitHub Action: re-runs the precompute whenever `spaces_clean.csv` changes and commits the artifacts — which triggers the normal Vercel deploy. No self-trigger loop (the bot commit touches only artifact paths). |
-| `dataset_meta.json` | The freshness stamp: written by `clean_dataset.py` on every run (refresh time, per-landlord counts, which PLUTO source was used). Served inside `/api/areas`; the UI footer renders it as "Listings data as of …". |
-| `pluto_cache.json` | A small committed snapshot of the PLUTO enrichment (address key -> coords/year built/floors/class). Lets `clean_dataset.py` run on CI runners where the 23 MB `manhattan_pluto.csv` backbone isn't available — verified to reproduce `spaces_clean.csv` byte-identically. |
-| `.github/workflows/refresh_data.yml` | The self-updating dataset: every Monday (or on demand) re-runs all three scrapers + the cleaner on a GitHub runner, refuses to commit if any landlord's rows collapse below 50% of the previous run (site redesigns fail loudly, never silently wipe data), then explicitly dispatches the embeddings workflow (GITHUB_TOKEN pushes don't fire on-push workflows) which chains the deploy. |
-| `test_engine.py` | 22 tests that pin down design decisions (neutral scores for unknowns, NaN-safe geo, descending order, landlord aggregation invariants). Run with `python test_engine.py` or pytest. |
-
-## How the scoring works
-
-```
-score = 0.20*type + 0.20*size + 0.15*budget + 0.25*geo + 0.20*semantic
-```
-
-- **type** — exact use match 1.0, related use (Showroom~Retail) 0.6, mismatch 0.1
-- **size** — 1.0 inside the requested range, decaying with % deviation outside
-- **budget** — 1.0 within budget, decaying with % overage; *unknown rent = 0.5
-  (neutral), because missing data should neither punish nor reward*
-- **geo** — haversine (great-circle) distance from the space's coordinates to
-  the requested neighborhood's centroid; 1.0 within 0.5 km, 0 beyond 8 km
-- **semantic** — cosine similarity between the tenant's free text and the
-  building descriptions. THREE backends, auto-selected and disclosed by the
-  API (`semantic_backend`): (1) sentence-transformers MiniLM locally,
-  (2) **the deployed path**: descriptions precomputed offline into
-  `embeddings.npz` (~0.6 MB) by a GitHub Action, queries embedded at request
-  time by the same MiniLM quantized to ONNX (~23 MB in `models/`,
-  onnxruntime instead of PyTorch), (3) TF-IDF keyword overlap as last
-  resort — labeled "NOT semantic". Why precompute instead of Render/Railway:
-  zero migration and zero cost, faster requests (406 descriptions never
-  re-embedded), and free-tier Render sleeps between requests + 512 MB RAM
-  makes PyTorch painful. Tradeoff: embeddings refresh requires the Action
-  run (automatic on data pushes) rather than happening implicitly.
-
-Every result carries its per-signal scores and a reason string — a ranking you
-can't explain is a ranking you can't defend.
-
-## How the landlord ranking works (v2 — three transparent signals)
-
-| signal | tenant label | what it is |
+| Layer | Choice | Why |
 |---|---|---|
-| `match_number` | **Spaces that fit you** | a COUNT: how many of the landlord's available spaces pass the tenant's HARD filters. Filter semantics: type strict; size strict (when a range is given); budget rejects only KNOWN rents above budget (92% of the market publishes "Upon request" — missing price ≠ bad price); area strict within 2 km, and an un-geocoded building FAILS (we never claim a location we can't verify). |
-| `specialization` | **Area & type expertise** | `(X/Y) × (X/(X+5))` where X = their available spaces of the requested area+type, Y = all their available spaces. The percentage, damped by the absolute count — so a 3-of-3 boutique (0.38) doesn't beat a 101-of-208 giant (0.46). Percentage alone is never used. |
-| `match_strength` | **Spaces match quality** | mean over their top-3 FITTING spaces of `0.25·size + 0.15·budget + 0.30·geo + 0.30·semantic`. The semantic part is cosine similarity between the tenant's free text and the descriptions (embeddings when sentence-transformers is installed, TF-IDF keyword overlap otherwise — the API reports which). The reason line quotes the matched phrase via `semantic.explain()`. If zero spaces fit, strength is `null` — reported, never faked. |
+| Scraping | `requests` + `BeautifulSoup4` + `lxml` | No headless browser needed — every scraper targets a real API call or server-rendered HTML, found by reading network traffic instead of reaching for Playwright by default |
+| Data engineering | `pandas`, raw NYC Open Data (PLUTO, GeoSearch) | Address-normalized joins against 27k-parcel PLUTO extract, NYC's own free geocoder for the rest |
+| Matching engine | Plain Python + `pandas`, no ML framework | Five weighted signals, fully inspectable, closed-form |
+| Semantic search | `sentence-transformers` (local) / `onnxruntime` + `tokenizers` (deployed) / hand-written TF-IDF (fallback) | Real embeddings where the compute budget allows, honest degradation where it doesn't |
+| Rent estimation | Raw `numpy` — closed-form ridge regression | ~30 training rows; anything fancier memorizes noise |
+| Backend | `FastAPI` + `uvicorn` | Auto-docs at `/docs`, typed query params, fast |
+| Frontend | Single `index.html`, vanilla JS, CSS variables | No build step, no framework, no bundler — deploys as a static file |
+| Deploy | Vercel (`@vercel/python`, git integration) | Push to `main` → live; weekly data refresh redeploys automatically |
+| CI/CD | GitHub Actions (2 workflows) | Scrape → clean → retrain → commit → re-embed → deploy, hands-off |
+| Tests | Custom runner, 33 tests, zero dependencies | `python test_engine.py` or `pytest` |
 
-List ordering (internal only, returned as `ordering`, not displayed):
-`0.40 · n/(n+10) + 0.25 · specialization + 0.35 · match_strength`.
-The saturation `n/(n+10)` gives diminishing returns instead of an arbitrary cap.
+## How the space ranking works
 
-## Design decisions worth remembering
+```
+score = 0.20·type + 0.20·size + 0.15·budget + 0.25·geo + 0.20·semantic
+```
 
-1. **API over Playwright.** The availabilities table is empty in the raw HTML
-   (JavaScript fills it). Instead of running a headless browser, we watched the
-   network traffic, found `/api/property`, and got cleaner data in 1 request
-   instead of ~60. Check the network tab before reaching for Playwright.
-2. **Neutral scores for missing data.** 61% of rents are "Upon request";
-   treating unknown as 0 would wrongly bury most of the inventory.
-3. **Ranking, not prediction.** Scores rank real, countable signals. No
-   invented "reliability" numbers with no ground truth.
-4. **Contacts are ownership-side.** Primary contact per row is GFP's own
-   Asset/Leasing Manager — never a broker. (Two buildings list outside
-   agents — JLL at 1540 Broadway, Lee & Associates at 149 W 36th — flagged
-   as a known caveat.)
-5. **The scraped dataset is not republished.** It powers the app locally.
+| Signal | What it measures |
+|---|---|
+| `type` | Exact use match = 1.0, related use (e.g. Showroom~Retail) = 0.6, mismatch = 0.1 |
+| `size` | 1.0 inside the requested range, decaying with % deviation outside |
+| `budget` | 1.0 within budget, decaying with % overage; **unknown rent = 0.5 (neutral)** — missing data should neither punish nor reward, and only ~5% of this dataset publishes a numeric rent |
+| `geo` | Haversine great-circle distance from the space to the requested submarket's centroid (or a custom "near a place" anchor); 1.0 within 0.5 km, 0 beyond 8 km |
+| `semantic` | Cosine similarity between the tenant's free text and the building description, via whichever of the three semantic backends is active |
 
-## UI data notes (v0.5)
+Every result returns its per-signal breakdown and a reason string — a score
+you can't explain is a score you can't defend.
 
-- **Building photos** (`building_images.json`, 101/101 buildings): hotlinked
-  from each landlord's own site — GFP's `/property-images/{slug}.jpg` pattern
-  (51) + their API's hero images (8), Rudin's `og:image` (12), SL Green's
-  first content photo per page (30). Not redistributed; the UI falls back to
-  a monogram tile if a landlord moves a file.
-- **Landlord logos**: hotlinked (GFP svg, SL Green png) on dark chips; Rudin's
-  logo is CSS-drawn on their site with no image file, so it gets a monogram.
-- **Areas** were reworked from an ad-hoc mix ("midtown" next to "plaza
-  district") into 17 consistent office submarkets (CBRE/JLL-style, ~1-2 km
-  each), grouped Manhattan / Beyond Manhattan in the dropdown.
-- **Suggestion chips** prefill the meaning-match box with phrases the corpus
-  actually rewards; clicking × removes exactly the inserted phrase.
+## How the landlord ranking works (three signals, no blended score)
 
-## v0.6 — robustness + richer search
+| Signal | Tenant-facing label | What it is |
+|---|---|---|
+| `match_number` | **Spaces that fit you** | Count of the landlord's available spaces that pass the tenant's *hard* filters (type strict, size strict when given, budget rejects only *known* rents over budget, area strict within 2 km — an un-geocoded building fails rather than being assumed nearby) |
+| `specialization` | **Area & type expertise** | `(x/y) × (x/(x+5))` — share of the landlord's portfolio matching the requested area+type, damped by absolute count so a 3-of-3 boutique doesn't outrank a 100-of-200 giant on percentage alone |
+| `match_strength` | **Spaces match quality** | Mean of `0.25·size + 0.15·budget + 0.30·geo + 0.30·semantic` over the landlord's top-3 fitting spaces; `null` (not faked) when nothing fits |
 
-- **Multi-area search**: the tenant picks any number of submarkets; geo score
-  and hard filters use the NEAREST selected centroid (several acceptable
-  centers, best one counts).
-- **Grouped deep rankings**: all ~400 spaces are ranked and returned; the UI
-  groups a building's suites into one card (406 spaces live in just 71
-  buildings — ungrouped, ten same-scoring suites looked like one listing
-  repeated) and paginates 10 buildings at a time.
-- **Edge-case hardening**: budget<=0 caused a ZeroDivisionError -> 500 ->
-  the UI hung on "Ranking…". TenantRequest now neutralizes nonsense inputs
-  (budget<=0, size<=0, swapped bounds, unknown areas), the UI has real error
-  cards + a 25s timeout, and `test_nonsense_inputs_never_crash` pins it.
-- **Landlord style** (institutional / family-run — honest labels: SL Green is
-  a public REIT, Rudin and GFP are family firms): a +3-point tiebreaker when
-  the tenant states a preference, disclosed in the reason line, never a
-  ranking driver (test-enforced <= 3.01 delta).
-- **Lease term** (short/long): captured and echoed for the future
-  landlord-contact flow, with ZERO effect on ranking (test-enforced). It
-  already flows into the prefilled inquiry email the tenant can send.
+An internal-only ordering score (`0.40·n/(n+10) + 0.25·specialization + 0.35·match_strength`,
+plus a small +0.04 nudge if the landlord matches a stated style
+preference) sorts the list but is never displayed — the three signals are
+shown separately because collapsing them into one number would hide the
+tradeoff between "fits a lot" and "fits well."
 
-## Known data caveats
+## The rent-estimation model
 
-- Only 33 of 135 spaces have a numeric rent; the rest are "Upon request"/"Negotiable".
-- 4 rows say "Leased" — kept in the CSV, excluded by `is_available`.
-- 7 GFP properties are residential/other (SoMA, student housing, co-ops) — kept, tagged `building_use = residential/other`, excluded from matching.
-- `address` = building name (street address); Jersey City / outer-borough rows carry it in `borough`.
+~95% of this dataset's listings publish "Upon request" instead of a number.
+`price_model.py` estimates those rents under four rules that all trace back
+to one goal: **never let an estimate look more certain than it is.**
 
-## v0.7 — freshness + lead capture
+1. **Estimates never touch ranking.** The budget signal keeps treating
+   unknown rent as neutral (0.5); the live count ignores estimates
+   entirely. A test runs the engine with the model disabled and asserts
+   identical scores, order, and counts.
+2. **The model only speaks where it has seen data** — every prediction
+   must fall inside the training envelope (the per-feature range of the
+   training set, ±10%). A model trained on midtown value buildings won't
+   price the Empire State Building.
+3. **Every estimate is a range**, sized from the 10th–90th percentile of
+   real leave-one-out residuals — as wide as the model is actually wrong,
+   not a decorative ±10%.
+4. **It refuses to ship when the data can't support it** — fewer than 25
+   usable training rows, or LOO MAE over 30% of mean rent, and
+   `price_model.json` marks itself not-ok; the API and UI then show
+   nothing rather than a shaky number.
 
-- **Data freshness, end to end**: `clean_dataset.py` stamps every run into
-  `dataset_meta.json`, the API exposes it, the UI footer shows "Listings data
-  as of {date} — N spaces across M buildings, refreshed weekly", and the
-  weekly `refresh-data` Action makes the sentence true without anyone
-  touching the project.
-- **Lead capture — with honest persistence**: "Request intro" on every
-  building card and landlord card opens a modal (the tenant's search attached
-  as pills, client + server validation). `POST /api/leads` validates with
-  Pydantic (name/email required, all fields length-bounded, the search echo
-  capped at 12 keys x 200 chars so a hostile client can't log megabytes) and
-  emits one structured JSON line ("SPACERANK_LEAD") to stdout — retrievable
-  in the Vercel dashboard logs. Serverless has no writable durable disk and
-  this project stores no secrets, so we say exactly that instead of
-  pretending there's a database; the success screen also offers a prefilled
-  email draft to the ownership-side contact as a parallel channel. Durable
-  storage (Vercel KV / Postgres) is the documented next step and needs a
-  credential.
+The model itself: closed-form ridge regression, `w = (XᵀX + λI)⁻¹Xᵀy`, pure
+numpy. With ~30 training rows anything more expressive memorizes noise;
+λ is chosen by leave-one-out grid search (the right cross-validation at
+this sample size — k-fold would waste too many rows). Features are
+building fundamentals only — `log(size)`, building age, floor count,
+distance to two Manhattan anchor points — with the landlord's identity
+deliberately excluded, so the model learns *why* rents differ instead of
+just memorizing which landlord charges more.
 
-## v0.8 — live count preview + the redesigned UI
+Current model card: **29 training rows, LOO MAE $2.63/SF (6.1% of mean
+rent $42.97/SF)** — retrained automatically every week as more landlords
+publish numeric rents and the training set (and its honest jurisdiction)
+grows.
 
-- **`GET /api/count`** — the number on the Search button. Applies exactly the
-  landlord layer's HARD-filter semantics (type strict; size strict when given;
-  budget rejects only known violations; area within 2 km) and touches no
-  semantic model, so it's cheap enough to call on every filter change
-  (debounced 280 ms, stale responses discarded by sequence number). Tests pin
-  two properties: adding a filter can only shrink the count, and vibe text /
-  landlord style / term never change it (they rank, they don't filter). When
-  the count is 0 the button honestly switches to "rank closest matches" —
-  ranking is soft even when the hard filters are empty.
-- **Full UI rebuild** (still one file, no framework): guided 4-step filter
-  rail with a sticky search dock, three one-click tenant personas, segmented
-  type picker, size quick-presets, tooltips on every non-obvious control,
-  score rings, animated signal bars, skeleton loaders, staggered card
-  entrances, saved-buildings drawer (device-local), dark mode (auto +
-  toggle), toasts, keyboard shortcut `/`, and List/Map view toggle.
-- **Map, dual-mode**: default is Leaflet + free Carto Voyager tiles (subway
-  stations, parks and landmarks appear as you zoom — and a dark tile set in
-  dark mode). Paste a Google Maps key into the single marked `GMAPS_KEY`
-  constant to switch the whole map to Google Maps with its transit layer;
-  score-colored numbered pins and popups work identically in both modes.
+## Honest-data rules (enforced by tests)
 
-## v0.10 — six landlords, full geocoding, shareable searches
+These aren't just conventions — `test_engine.py` pins them as invariants:
 
-- **Landlords #4-6**: `scrape_vornado.py` (vno.com — server-rendered property
-  pages with embedded map coordinates; office + street-retail portfolios,
-  filtered to NYC by coordinate bounding box; @vno.com leasing contacts),
-  `scrape_durst.py` (durst.org — one /availabilities page, per-building
-  tables whose COMMENTS column gives real per-suite descriptions; addresses
-  from property pages), `scrape_esrt.py` (esrtreit.com — WordPress
-  availability cards with SF/address/suite/condition; the wp-json API is
-  auth-locked so the rendered page is the source of truth). Styles:
-  Vornado + ESRT institutional (public REITs), Durst family-run.
-  Dataset: **618 available spaces / 116 buildings / 6 landlords**.
-- **Geocoding**: buildings PLUTO can't match are geocoded via the free NYC
-  GeoSearch API — live on CI runners, from the committed
-  `geocode_cache.json` elsewhere. Coordinate coverage is now 100%, so area
-  filters see the whole inventory.
-- **Shareable searches**: the whole search lives in the URL
-  (`?type=&areas=&smin=&budget=&q=…`) — bookmark it, send it, hit
-  back/forward; a "Share search" button copies the link. Opening a link
-  restores every filter and searches automatically.
-- The weekly refresh workflow now runs every `scrape_*.py` it finds — adding
-  landlord #7 is: write one scraper, commit, done.
+- Unknown values score neutral (0.5) and display as "—"/"n/a", never an
+  invented number.
+- Rent estimates are clearly marked (`≈`, an amber chip, a tooltip with
+  training size and error) and **provably** never affect ranking,
+  filtering, or the live result count.
+- A stated landlord-style or fit-condition preference is a small
+  tiebreaker (≤3 points of 100), never a ranking driver.
+- Lease term is captured and echoed (for a future contact flow) but has
+  zero scoring effect.
+- The live result count can only shrink as filters are added — it's a
+  monotonicity guarantee, not just a UI nicety.
+- An un-geocoded space or landlord fails area filters rather than being
+  silently assumed to be "close enough."
 
-## v0.11 — the rent-estimate model (interview deep-dive)
+## Data pipeline & the weekly refresh
 
-Most NYC landlords publish "Upon request" instead of a rent (92% of this
-dataset). `price_model.py` estimates those rents under four hard rules:
+```
+scrape_*.py (×17)  →  *_listings.csv  →  clean_dataset.py  →  spaces_clean.csv + dataset_meta.json
+                                                │
+                          ┌─────────────────────┼─────────────────────┐
+                          ▼                                           ▼
+                  price_model.py                          tools/precompute_embeddings.py
+                          │                                           │
+                  price_model.json                    embeddings.npz + models/ (ONNX, tokenizer)
+```
 
-1. **Estimates never touch the ranking.** Scoring keeps treating unknown
-   rent as neutral; the live count ignores estimates entirely. A test runs
-   the engine with the model disabled and asserts identical scores, order,
-   and counts.
-2. **The model only speaks where it has seen data.** Every prediction must
-   fall inside the *training envelope* — the per-feature range of the
-   training set (±10%). A model trained on value/loft buildings is not
-   allowed to price the Empire State Building.
-3. **Every estimate is a range, not a number.** The band is the 10th–90th
-   percentile of real leave-one-out residuals — as wide as the model is
-   actually wrong, not a decorative ±10%.
-4. **It refuses to ship when the data can't support it**: fewer than 25
-   usable rents, or LOO MAE above 30% of the mean rent, and
-   `price_model.json` marks itself not-ok — the API and UI then simply
-   show nothing.
+- **`clean_dataset.py`** parses rent strings (`"$40.00 PSF"` → `40.0`,
+  never guessing when it says "Upon request"), flags leased/placeholder
+  rows, tags residential-use buildings out of the matching pool, and joins
+  each address against a normalized NYC PLUTO extract for year built /
+  floor count / building class. Buildings PLUTO can't resolve fall back to
+  the free NYC GeoSearch API — **coordinate coverage is 100%.**
+- **`.github/workflows/refresh_data.yml`** — every Monday (or on demand):
+  runs all 17 scrapers, rebuilds the dataset, retrains the rent model,
+  **aborts the commit if any landlord's row count collapses by more than
+  50%** (a site redesign should fail loudly, never silently wipe that
+  landlord's data), commits, then explicitly dispatches the embeddings
+  workflow — because commits made with the default `GITHUB_TOKEN` don't
+  trigger other `on: push` workflows.
+- **`.github/workflows/embeddings.yml`** — re-embeds every description,
+  commits `embeddings.npz` + `models/`, which triggers the normal Vercel
+  git-integration deploy.
+- **Adding landlord #18** is: write one `scrape_<name>.py` matching the
+  existing CSV schema, optionally classify it in `LANDLORD_PROFILES` if it
+  honestly fits "institutional" (public REIT) or "family-run"
+  (family-owned/led — left unclassified if it fits neither, as RXR Realty
+  intentionally is). Commit; the weekly Action picks it up automatically.
 
-**The model**: ridge regression, closed form `w = (XᵀX + λI)⁻¹ Xᵀy`, numpy
-only. With ~30 training rows anything fancier memorizes noise; ridge's λ
-(chosen by leave-one-out grid search — the right CV at this n, since k-fold
-would waste rows) shrinks coefficients exactly as a tiny sample requires.
-Features are building fundamentals only — log(size), building age, floors,
-distance to two anchor centroids (Plaza district, Union Square) — and the
-landlord's identity is deliberately excluded: it would leak "this landlord
-prices low" instead of learning *why*. Near-constant features are dropped
-automatically before standardization to keep XᵀX well-conditioned.
+### PLUTO & geocoding caches
 
-**The pipeline**: the weekly refresh retrains after every scrape and
-commits `price_model.json` (coefficients, scaler, envelope, residual band,
-metrics). Serving is one dot product per space. As more landlords publish
-rents, the training set grows and the envelope — the model's honest
-jurisdiction — widens by itself. The UI marks every estimate with `≈`, an
-amber chip, and a tooltip stating the training size and typical error;
-the footer reports the model card.
+`manhattan_pluto.csv` (the 23 MB PLUTO source extract) is deliberately
+**not** in the repo — `pluto_cache.json` is a small committed snapshot
+that reproduces `spaces_clean.csv` byte-identically on machines (including
+CI runners) that don't have the full file. `geocode_cache.json` and
+`subway_stations.json` follow the same pattern for the NYC GeoSearch API
+and MTA station data respectively.
 
-## Roadmap position
+## Scraper notes (one site, one architecture)
 
-Done: PLUTO backbone → GFP scraper → clean dataset → matching v1 (structured +
-geo) → semantic layer (with fallback) → Rudin scraper (68 spaces) → landlord
-ranking (Layer 3) → FastAPI backend + frontend → **DEPLOYED LIVE at
-https://spacerank-nyc.vercel.app** → SL Green scraper (224 units — dataset now
-406 available spaces / 3 landlords / 101 buildings) → PLUTO enrichment joined
-by address → results map → test suite. (Scouted Silverstein too: their site
-is a portfolio brochure with no availabilities or contacts — documented dead
-end.) The deployed instance runs the TF-IDF semantic backend (embeddings are
-too heavy for serverless). Next: install sentence-transformers locally for
-real embeddings, more landlords (Vornado, Durst...). Bonus: price model.
+Every landlord's site is built differently, so every scraper is a small
+case study in reading a site instead of assuming a pattern:
+
+- **GFP Real Estate** — the availabilities table is empty in raw HTML
+  (JS-rendered). Reading network traffic instead of reaching for a headless
+  browser found `/api/property`: one JSON call for all buildings +
+  availabilities, then BeautifulSoup per building page for the description
+  and ownership-side contact.
+- **Rudin Management** — the architectural opposite: fully server-rendered
+  Drupal, paginated `/all-availabilities`. No public rents or emails, so
+  the contact is recorded honestly as "inquire via site" rather than
+  invented.
+- **SL Green** — WordPress/Divi, the richest single source (real
+  `@slgreen.com` contacts, rent + term + occupancy). Units render three
+  times across desktop/mobile/detail views and must be deduped; broker
+  (C&W) listings are filtered out per the ownership-side-only rule.
+- **Empire State Realty Trust** — the site's own JSON API is auth-locked,
+  so the rendered page (not the API) is the real source of truth — a
+  reminder to verify an API is actually reachable before depending on it.
+- Full per-landlord notes live in each `scrape_<name>.py`'s docstring.
+
+## Repo layout
+
+| Path | What it is |
+|---|---|
+| `scrape_*.py` (×17) | One scraper per landlord — see [Scraper notes](#scraper-notes-one-site-one-architecture) |
+| `*_listings.csv` | Raw per-landlord scrape output |
+| `clean_dataset.py` | Merge, rent parsing, PLUTO enrichment, geocoding → `spaces_clean.csv` |
+| `spaces_clean.csv` | The engine's input — one harmonized table |
+| `dataset_meta.json` | Freshness stamp (refresh time, per-landlord counts) served by `/api/areas` |
+| `matching.py` | The 5-signal space-ranking engine |
+| `semantic.py` | 3-tier semantic search (sentence-transformers → ONNX MiniLM → TF-IDF) |
+| `landlord.py` | The 3-signal landlord ranking layer |
+| `price_model.py` | Closed-form ridge regression rent estimator |
+| `app.py` | FastAPI backend — see [API reference](#api-reference) |
+| `index.html` | The single-file frontend |
+| `demo_match.py` | Three example tenant personas, ranked end-to-end in the terminal |
+| `test_engine.py` | 33 tests pinning every design decision above |
+| `tools/precompute_embeddings.py` | Offline embedding precompute for the deployed semantic backend |
+| `tools/build_subway_stations.py` | One-time build of `subway_stations.json` from NY State open data |
+| `pluto_cache.json` / `geocode_cache.json` | Committed snapshots so CI/other machines don't need the full PLUTO extract or a live geocoder call |
+| `.github/workflows/refresh_data.yml` | Weekly scrape → clean → retrain → commit pipeline |
+| `.github/workflows/embeddings.yml` | Re-embed → commit → deploy |
+
+## Getting started
+
+```bash
+python -m pip install -r requirements.txt          # runtime deps
+python -m pip install -r requirements-dev.txt       # + scraping/test extras
+
+python test_engine.py                                # 33 tests — should be green
+python -m uvicorn app:app --reload                   # http://127.0.0.1:8000
+python demo_match.py                                  # 3 tenant personas, terminal output
+```
+
+Windows: use `python`, not `python3`.
+
+To rebuild the dataset from scratch:
+
+```bash
+python scrape_gfp.py          # ... or any of the 17 scrape_*.py files
+python clean_dataset.py       # merge + enrich -> spaces_clean.csv
+python price_model.py         # retrain the rent model -> price_model.json
+```
+
+Real (non-fallback) semantic search locally: `pip install sentence-transformers`.
+No environment variables are required to run the app — see
+[`.env.example`](.env.example) for what's documented for future features.
+
+## API reference
+
+FastAPI auto-docs are live at [`/docs`](https://spacerank-nyc.vercel.app/docs). Summary:
+
+<p align="center">
+  <img src="docs/screenshots/api-docs.png" alt="FastAPI auto-generated interactive docs" width="80%">
+</p>
+
+| Endpoint | What it returns |
+|---|---|
+| `GET /` | The search UI |
+| `GET /api/areas` | Submarkets, landlord styles, active semantic backend, dataset freshness, rent-model card |
+| `GET /api/match` | Ranked spaces for a tenant request |
+| `GET /api/count` | Live count of spaces passing hard filters only (powers the search-button preview) |
+| `GET /api/landlords` | Ranked landlords for the same request |
+| `GET /api/subway-stations` | Typeahead search over real MTA station complexes (search anchor) |
+| `GET /api/geocode` | Resolve a free-text address via NYC GeoSearch |
+| `POST /api/leads` | Validated lead capture — see below |
+
+All search endpoints share the same query params (`property_type`,
+`size_min`/`size_max`, `budget`, repeated `area=`, `q`, `landlord_style`,
+`term`, `fit`, `anchor_lat`/`anchor_lng`/`anchor_label`) so a search's
+entire state round-trips through the URL — every result is shareable and
+bookmarkable.
+
+**Lead capture, with an honest persistence story**: Vercel functions have
+no writable durable disk and this project holds no database credential
+today, so `/api/leads` validates input (Pydantic, length-bounded fields,
+a hostile client can't log megabytes through the echoed search) and emits
+one structured JSON line to stdout — retrievable in the Vercel dashboard
+logs — rather than pretending there's a database that doesn't exist. The
+UI also offers a prefilled email fallback so no inquiry is ever silently
+lost. Durable storage (Vercel Postgres/KV) is the documented next step; see
+[`.env.example`](.env.example) for how a credential would be wired in
+without ever being hardcoded.
+
+## Testing
+
+```bash
+python test_engine.py     # or: pytest
+```
+
+33 tests, zero external dependencies, covering every design-decision rule
+above (neutral unknowns, monotonic counts, estimates never touching
+ranking, hard-filter correctness, NaN safety end-to-end, nonsense-input
+handling, and more). When a new behavior rule is added to the engine, a
+test is added to pin it — the suite is the spec.
+
+## Known limitations
+
+- Only ~5% of listings publish a numeric rent; the rest show "Upon
+  request" honestly rather than an estimate presented as fact (the rent
+  model fills part of this gap under strict guardrails — see above).
+- Lead capture logs to stdout rather than a database (serverless + no
+  provisioned credential today — documented next step).
+- The deployed semantic backend is a quantized ONNX export of MiniLM
+  rather than the full-precision model, traded for a ~40 MB footprint with
+  no PyTorch/GPU dependency on serverless.
+- Coverage is Manhattan-heavy with some outer-borough and Jersey City
+  buildings; no landlord scraper outputs suburban/New Jersey-interior
+  inventory.
+
+## Roadmap
+
+- Durable lead storage (Vercel Postgres/KV) once the credential is
+  provisioned.
+- More landlords as new scrapers are written — adding one is a single
+  file plus a commit (see [Data pipeline](#data-pipeline--the-weekly-refresh)).
+- A landlord-contact flow that uses the already-captured lease `term`
+  field.
+- Expanding the rent model's training envelope as more landlords publish
+  numeric rents.
+
+## License
+
+[MIT](LICENSE) — see the license file for details.
