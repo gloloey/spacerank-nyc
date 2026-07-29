@@ -82,7 +82,7 @@ step. Every design decision below has a documented reason.
 
 ```mermaid
 flowchart LR
-    subgraph Offline Pipeline
+    subgraph "Offline Pipeline"
         A["17× scrape_*.py<br/>(requests + BeautifulSoup)"] --> B["*_listings.csv<br/>(raw, one per landlord)"]
         B --> C["clean_dataset.py<br/>merge · rent parsing · PLUTO join · geocoding"]
         C --> D["spaces_clean.csv<br/>+ dataset_meta.json"]
@@ -92,7 +92,7 @@ flowchart LR
         G --> H["embeddings.npz<br/>+ models/ (ONNX + tokenizer)"]
     end
 
-    subgraph Runtime — Vercel serverless
+    subgraph "Runtime - Vercel serverless"
         D --> I["matching.py<br/>5-signal engine"]
         F --> I
         H --> J["semantic.py<br/>3-tier backend"]
