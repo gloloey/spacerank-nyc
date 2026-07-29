@@ -13,10 +13,10 @@ landlords behind them (three transparent signals). Built by Gabriel (student,
 rusty Python) as a portfolio project for interviews.
 
 ## Non-negotiable project rules
-1. **Gabriel must be able to explain every line in an AI-free interview.**
-   Prefer simple, from-scratch, heavily-commented code over clever
-   dependencies (the semantic fallback is hand-written TF-IDF; the price
-   model is closed-form ridge in numpy — keep that spirit).
+1. **Every line must be simple enough to explain and defend from first
+   principles.** Prefer simple, from-scratch, heavily-commented code over
+   clever dependencies (the semantic fallback is hand-written TF-IDF; the
+   price model is closed-form ridge in numpy — keep that spirit).
 2. **Honest-data design principle.** Unknown values score neutral (0.5),
    display as "—"/"n/a" with an explanation — never as an invented number.
    Rent estimates are clearly marked, range-only, and never affect ranking,
