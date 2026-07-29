@@ -167,7 +167,7 @@ def main():
         except Exception as e:
             print(f"  !! {slug}: {type(e).__name__} {e}")
 
-    with open("savanna_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/savanna_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(rows)

@@ -104,7 +104,7 @@ def main():
         })
         print(f"  {name[:34]:34s} {floor_suite[:16]:16s} {it.get('square_footage')} sf")
 
-    with open("twotrees_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/twotrees_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(rows)

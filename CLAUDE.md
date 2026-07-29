@@ -37,7 +37,7 @@ rusty Python) as a portfolio project for interviews.
    they're working notes rather than polished documentation.
 
 ## Architecture in one paragraph
-`scrape_*.py` (one per landlord, requests+BS4) → `*_listings.csv` →
+`scrapers/scrape_*.py` (one per landlord, requests+BS4) → `data/raw/*_listings.csv` →
 `clean_dataset.py` (merge, rent parsing, PLUTO enrichment via
 `pluto_cache.json`, NYC GeoSearch geocoding via `geocode_cache.json`) →
 `spaces_clean.csv` + `dataset_meta.json` → `matching.py` (5-signal engine)
@@ -50,14 +50,15 @@ entrypoint).
 
 ## The automation (do not break the chain)
 - `.github/workflows/refresh_data.yml` — Mondays 09:00 UTC + manual: runs
-  every `scrape_*.py`, rebuilds the dataset, retrains the price model,
-  sanity-guards (>50% row collapse per landlord aborts), commits, then
+  every `scrapers/scrape_*.py`, rebuilds the dataset, retrains the price
+  model, sanity-guards (>50% row collapse per landlord aborts), commits, then
   **explicitly dispatches** embeddings.yml (`gh workflow run`) because
   GITHUB_TOKEN pushes don't trigger on-push workflows.
 - `.github/workflows/embeddings.yml` — re-embeds descriptions, commits
   `embeddings.npz` + `models/`, which triggers the Vercel deploy.
-- Adding a landlord = write one `scrape_<name>.py` (match the CSV schema in
-  any existing scraper, include `image_url`), add it to `LANDLORD_PROFILES`
+- Adding a landlord = write one `scrapers/scrape_<name>.py` (match the CSV
+  schema in any existing scraper, write output to `data/raw/<name>_listings.csv`,
+  include `image_url`), add it to `LANDLORD_PROFILES`
   in matching.py **only if** it honestly fits "institutional" (public
   REIT) or "family-run" (family-owned/led) — RXR fits neither and is
   intentionally left out, staying unclassified rather than forced. Commit;
@@ -67,9 +68,9 @@ entrypoint).
 ```
 python -m pip install -r requirements.txt          # runtime deps
 python -m pip install -r requirements-dev.txt      # + scraping/test deps
-python test_engine.py            # 33 tests — MUST stay green (or: pytest)
+python test_engine.py            # 36 tests — MUST stay green (or: pytest)
 python -m uvicorn app:app --reload                 # local server :8000
-python clean_dataset.py          # rebuild dataset from *_listings.csv
+python clean_dataset.py          # rebuild dataset from data/raw/*_listings.csv
 python price_model.py            # retrain rent model -> price_model.json
 python demo_match.py             # 3 personas end-to-end in the terminal
 ```

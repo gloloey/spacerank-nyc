@@ -138,7 +138,7 @@ def main():
             n_spaces += 1
         print(f"  {name[:40]:40s} {space_type:7s} {n_spaces} spaces")
 
-    with open("feil_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/feil_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(rows)

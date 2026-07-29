@@ -153,7 +153,7 @@ def main():
                       f"{sum(1 for r in got if r['floor_suite'])} spaces")
         except Exception as e:
             print(f"  !! {url}: {type(e).__name__} {e}")
-    with open("brookfield_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/brookfield_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(all_rows)

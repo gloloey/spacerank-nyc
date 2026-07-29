@@ -133,7 +133,7 @@ def main():
         print(f"  {name[:34]:34s} avail={it.get('availability')} geo={'Y' if lat else 'N'} "
               f"img={'Y' if image_url else 'N'}")
 
-    with open("silverstein_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/silverstein_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(rows)

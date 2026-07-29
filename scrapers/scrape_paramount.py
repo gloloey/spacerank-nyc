@@ -150,7 +150,7 @@ def main():
         all_rows.extend(rows)
         print(f"  {name[:40]:40s} {sum(1 for r in rows if r['floor_suite'])} spaces")
 
-    with open("paramount_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/paramount_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(all_rows)

@@ -52,7 +52,7 @@ jobs:
 
       - name: Run scrapers (polite rate limits inside each script)
         run: |
-          for s in scrape_*.py; do
+          for s in scrapers/scrape_*.py; do
             echo "=== $s ==="
             python "$s"
           done
@@ -81,7 +81,7 @@ jobs:
         run: |
           git config user.name "spacerank-refresh-bot"
           git config user.email "actions@github.com"
-          git add spaces_clean.csv dataset_meta.json pluto_cache.json geocode_cache.json price_model.json *_listings.csv building_coords.json
+          git add spaces_clean.csv dataset_meta.json pluto_cache.json geocode_cache.json price_model.json data/raw/*_listings.csv building_coords.json
           if git diff --cached --quiet; then
             echo "No data changes this week."
           else

@@ -209,7 +209,7 @@ def main(test_only=False):
         return
 
     # ---- PHASE 5: save + summary ----
-    out = "gfp_listings.csv"
+    out = "data/raw/gfp_listings.csv"
     with open(out, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=COLUMNS)
         writer.writeheader()

@@ -139,7 +139,7 @@ def main():
             "lat": b["lat"], "lng": b["lng"],
         })
 
-    with open("rudin_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/rudin_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=COLUMNS)
         w.writeheader()
         w.writerows(rows)

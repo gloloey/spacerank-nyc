@@ -2,7 +2,7 @@
 
 **A commercial real-estate matching engine for New York City — live at [spacerank-nyc.vercel.app](https://spacerank-nyc.vercel.app)**
 
-[![Tests](https://img.shields.io/badge/tests-33%20passing-brightgreen)](test_engine.py)
+[![Tests](https://img.shields.io/badge/tests-36%20passing-brightgreen)](test_engine.py)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](requirements.txt)
 [![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![Data refresh](https://img.shields.io/badge/data-refreshed%20weekly-informational)](.github/workflows/refresh_data.yml)
@@ -14,13 +14,13 @@ behind them (three transparent signals), with a direct ownership-side
 leasing contact for each result. No brokers, no invented numbers, no
 black-box score.
 
-Built solo, end to end: 17 landlord scrapers, a data-cleaning + enrichment
+Built solo, end to end: 19 landlord scrapers, a data-cleaning + enrichment
 pipeline, a from-scratch matching engine, a semantic-search layer with a
 three-tier fallback chain, a closed-form rent-estimation model, a FastAPI
 backend, a single-file no-framework frontend, and a weekly GitHub Actions
 pipeline that keeps the whole thing self-updating in production.
 
-**Current dataset: 1,123 rows · 1,013 available spaces · 270 buildings · 17 landlords · 100% geocoded**
+**Current dataset: 1,143 rows · 1,033 available spaces · 290 buildings · 19 landlords · 100% geocoded**
 
 <p align="center">
   <img src="docs/screenshots/results-view.png" alt="Ranked results — score rings, per-signal bars, ownership-side contacts" width="90%">
@@ -69,12 +69,12 @@ step. Every design decision below has a documented reason.
   because a single blended "landlord score" would hide more than it
   revealed. [`landlord.py`](landlord.py)
 - **A self-updating production pipeline**: a GitHub Action re-scrapes all
-  17 landlords weekly, rebuilds the dataset, retrains the rent model,
+  19 landlords weekly, rebuilds the dataset, retrains the rent model,
   refuses to commit if any landlord's listings collapse by >50% (a scraper
   breaking silently is worse than it breaking loudly), then chains into a
   second Action that re-embeds descriptions and deploys — with zero manual
   steps between a landlord redesigning their site and the fix shipping.
-- **17 real-world scrapers**, each written against a different site
+- **19 real-world scrapers**, each written against a different site
   architecture (JSON APIs, server-rendered Drupal, WordPress with
   lazy-loaded images, paginated tables) — see [Scraper notes](#scraper-notes-one-site-one-architecture).
 
@@ -83,7 +83,7 @@ step. Every design decision below has a documented reason.
 ```mermaid
 flowchart LR
     subgraph "Offline Pipeline"
-        A["17× scrape_*.py<br/>(requests + BeautifulSoup)"] --> B["*_listings.csv<br/>(raw, one per landlord)"]
+        A["19× scrapers/scrape_*.py<br/>(requests + BeautifulSoup)"] --> B["data/raw/*_listings.csv<br/>(raw, one per landlord)"]
         B --> C["clean_dataset.py<br/>merge · rent parsing · PLUTO join · geocoding"]
         C --> D["spaces_clean.csv<br/>+ dataset_meta.json"]
         D --> E["price_model.py<br/>ridge regression, LOO CV"]
@@ -121,7 +121,7 @@ flowchart LR
 | Frontend | Single `index.html`, vanilla JS, CSS variables | No build step, no framework, no bundler — deploys as a static file |
 | Deploy | Vercel (`@vercel/python`, git integration) | Push to `main` → live; weekly data refresh redeploys automatically |
 | CI/CD | GitHub Actions (2 workflows) | Scrape → clean → retrain → commit → re-embed → deploy, hands-off |
-| Tests | Custom runner, 33 tests, zero dependencies | `python test_engine.py` or `pytest` |
+| Tests | Custom runner, 36 tests, zero dependencies | `python test_engine.py` or `pytest` |
 
 ## How the space ranking works
 
@@ -211,7 +211,7 @@ These aren't just conventions — `test_engine.py` pins them as invariants:
 ## Data pipeline & the weekly refresh
 
 ```
-scrape_*.py (×17)  →  *_listings.csv  →  clean_dataset.py  →  spaces_clean.csv + dataset_meta.json
+scrapers/scrape_*.py (×19)  →  data/raw/*_listings.csv  →  clean_dataset.py  →  spaces_clean.csv + dataset_meta.json
                                                 │
                           ┌─────────────────────┼─────────────────────┐
                           ▼                                           ▼
@@ -227,7 +227,7 @@ scrape_*.py (×17)  →  *_listings.csv  →  clean_dataset.py  →  spaces_clea
   floor count / building class. Buildings PLUTO can't resolve fall back to
   the free NYC GeoSearch API — **coordinate coverage is 100%.**
 - **`.github/workflows/refresh_data.yml`** — every Monday (or on demand):
-  runs all 17 scrapers, rebuilds the dataset, retrains the rent model,
+  runs all 19 scrapers, rebuilds the dataset, retrains the rent model,
   **aborts the commit if any landlord's row count collapses by more than
   50%** (a site redesign should fail loudly, never silently wipe that
   landlord's data), commits, then explicitly dispatches the embeddings
@@ -236,8 +236,10 @@ scrape_*.py (×17)  →  *_listings.csv  →  clean_dataset.py  →  spaces_clea
 - **`.github/workflows/embeddings.yml`** — re-embeds every description,
   commits `embeddings.npz` + `models/`, which triggers the normal Vercel
   git-integration deploy.
-- **Adding landlord #18** is: write one `scrape_<name>.py` matching the
-  existing CSV schema, optionally classify it in `LANDLORD_PROFILES` if it
+- **Adding landlord #20** is: write one `scrapers/scrape_<name>.py`
+  matching the existing CSV schema (output to
+  `data/raw/<name>_listings.csv`), optionally classify it in
+  `LANDLORD_PROFILES` if it
   honestly fits "institutional" (public REIT) or "family-run"
   (family-owned/led — left unclassified if it fits neither, as RXR Realty
   intentionally is). Commit; the weekly Action picks it up automatically.
@@ -278,8 +280,8 @@ case study in reading a site instead of assuming a pattern:
 
 | Path | What it is |
 |---|---|
-| `scrape_*.py` (×17) | One scraper per landlord — see [Scraper notes](#scraper-notes-one-site-one-architecture) |
-| `*_listings.csv` | Raw per-landlord scrape output |
+| `scrapers/scrape_*.py` (×19) | One scraper per landlord — see [Scraper notes](#scraper-notes-one-site-one-architecture) |
+| `data/raw/*_listings.csv` | Raw per-landlord scrape output |
 | `clean_dataset.py` | Merge, rent parsing, PLUTO enrichment, geocoding → `spaces_clean.csv` |
 | `spaces_clean.csv` | The engine's input — one harmonized table |
 | `dataset_meta.json` | Freshness stamp (refresh time, per-landlord counts) served by `/api/areas` |
@@ -290,7 +292,7 @@ case study in reading a site instead of assuming a pattern:
 | `app.py` | FastAPI backend — see [API reference](#api-reference) |
 | `index.html` | The single-file frontend |
 | `demo_match.py` | Three example tenant personas, ranked end-to-end in the terminal |
-| `test_engine.py` | 33 tests pinning every design decision above |
+| `test_engine.py` | 36 tests pinning every design decision above |
 | `tools/precompute_embeddings.py` | Offline embedding precompute for the deployed semantic backend |
 | `tools/build_subway_stations.py` | One-time build of `subway_stations.json` from NY State open data |
 | `pluto_cache.json` / `geocode_cache.json` | Committed snapshots so CI/other machines don't need the full PLUTO extract or a live geocoder call |
@@ -303,7 +305,7 @@ case study in reading a site instead of assuming a pattern:
 python -m pip install -r requirements.txt          # runtime deps
 python -m pip install -r requirements-dev.txt       # + scraping/test extras
 
-python test_engine.py                                # 33 tests — should be green
+python test_engine.py                                # 36 tests — should be green
 python -m uvicorn app:app --reload                   # http://127.0.0.1:8000
 python demo_match.py                                  # 3 tenant personas, terminal output
 ```
@@ -313,9 +315,9 @@ Windows: use `python`, not `python3`.
 To rebuild the dataset from scratch:
 
 ```bash
-python scrape_gfp.py          # ... or any of the 17 scrape_*.py files
-python clean_dataset.py       # merge + enrich -> spaces_clean.csv
-python price_model.py         # retrain the rent model -> price_model.json
+python scrapers/scrape_gfp.py   # ... or any of the 19 scrapers/scrape_*.py files
+python clean_dataset.py         # merge + enrich -> spaces_clean.csv
+python price_model.py           # retrain the rent model -> price_model.json
 ```
 
 Real (non-fallback) semantic search locally: `pip install sentence-transformers`.
@@ -364,7 +366,7 @@ without ever being hardcoded.
 python test_engine.py     # or: pytest
 ```
 
-33 tests, zero external dependencies, covering every design-decision rule
+36 tests, zero external dependencies, covering every design-decision rule
 above (neutral unknowns, monotonic counts, estimates never touching
 ranking, hard-filter correctness, NaN safety end-to-end, nonsense-input
 handling, and more). When a new behavior rule is added to the engine, a

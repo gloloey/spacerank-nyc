@@ -225,7 +225,7 @@ def main():
             print(f"  {b['name'][:40]:40s} {sum(1 for r in got if r['floor_suite'])} spaces")
         except Exception as e:
             print(f"  !! {b['name']}: {type(e).__name__} {e}")
-    with open("rxr_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/rxr_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(all_rows)

@@ -177,7 +177,7 @@ def main():
             except Exception as e:
                 print(f"  !! block error: {type(e).__name__} {e}")
 
-    with open("resnick_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/resnick_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(all_rows)

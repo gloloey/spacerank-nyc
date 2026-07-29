@@ -168,7 +168,7 @@ def main():
             n += 1
         print(f"  {name[:34]:34s} {n} spaces")
 
-    with open("gcomfort_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/gcomfort_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(rows)

@@ -134,7 +134,7 @@ def main():
         })
         print(f"  {name[:34]:34s} {floor_suite[:26]:26s} {sqft} sf")
 
-    with open("sage_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/sage_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(rows)

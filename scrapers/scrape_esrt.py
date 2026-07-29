@@ -136,7 +136,7 @@ def main():
         })
         print(f"  {building[:34]:34s} {suite[:26]:26s} {sf:>10s} geo={'Y' if lat else 'N'}")
 
-    with open("esrt_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/esrt_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(rows)

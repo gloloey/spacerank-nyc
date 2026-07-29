@@ -143,7 +143,7 @@ def load_pluto():
 
 
 def main():
-    frames = [pd.read_csv(f) for f in sorted(glob.glob("*_listings.csv"))]
+    frames = [pd.read_csv(f) for f in sorted(glob.glob("data/raw/*_listings.csv"))]
     df = pd.concat(frames, ignore_index=True)
     with open("building_coords.json", encoding="utf-8") as f:
         coords = json.load(f)                          # GFP: slug -> [lng, lat]

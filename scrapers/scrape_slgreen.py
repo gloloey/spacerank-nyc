@@ -153,7 +153,7 @@ def main():
         print(f"[{i:2d}/{len(pages)}] {page['name']:38.38s} units={len(units)}")
         time.sleep(2)
 
-    with open("slgreen_listings.csv", "w", newline="", encoding="utf-8") as f:
+    with open("data/raw/slgreen_listings.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=COLUMNS)
         w.writeheader()
         w.writerows(rows)
