@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+if (localStorage.getItem("sr_dark") === "1" ||
+    (localStorage.getItem("sr_dark") === null && matchMedia("(prefers-color-scheme: dark)").matches))
+  document.documentElement.classList.add("dark");
+</script>
+<title>SpaceRank NYC — admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#f3f5fa; --card:#ffffff; --card2:#f8fafd;
+  --ink:#0b1324; --ink-soft:#5a6478; --ink-faint:#868da0;
+  --line:#e2e7f1;
+  --blue:#2456e6; --blue-soft:#e8eeff; --blue-ink:#16337f;
+  --danger:#dd3d43; --danger-soft:#fdecec;
+  --r:14px; --r-sm:10px;
+  --disp:'Sora',sans-serif; --body:'Inter',system-ui,sans-serif;
+}
+html.dark {
+  --bg:#0a0f1d; --card:#121a2f; --card2:#182440;
+  --ink:#edf1fa; --ink-soft:#9aa5bc; --ink-faint:#7a8298;
+  --line:#20294a;
+  --blue:#6b93ff; --blue-soft:#1a2857; --blue-ink:#c5d4ff;
+  --danger:#ff6b70; --danger-soft:#3a1518;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--bg); color:var(--ink); font-family:var(--body);
+  padding:32px 20px 80px;
+}
+h1 { font-family:var(--disp); font-size:22px; margin:0 0 4px; }
+.sub { color:var(--ink-soft); font-size:14px; margin:0 0 28px; }
+.wrap { max-width:920px; margin:0 auto; }
+.card {
+  background:var(--card); border:1px solid var(--line); border-radius:var(--r);
+  padding:20px; margin-bottom:20px;
+}
+label { font-size:13px; font-weight:600; color:var(--ink-soft); display:block; margin-bottom:6px; }
+input[type=password], input[type=text] {
+  font:inherit; width:100%; padding:10px 12px; border-radius:var(--r-sm);
+  border:1px solid var(--line); background:var(--card2); color:var(--ink);
+}
+button {
+  font:inherit; font-weight:600; cursor:pointer; border:none; border-radius:var(--r-sm);
+  padding:10px 18px; background:var(--blue); color:#fff; margin-top:12px;
+}
+button:hover { filter:brightness(1.08); }
+.err { color:var(--danger); font-size:13px; margin-top:10px; display:none; }
+.stat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:14px; }
+.stat { background:var(--card2); border-radius:var(--r-sm); padding:14px; }
+.stat .n { font-family:var(--disp); font-size:26px; }
+.stat .l { font-size:12px; color:var(--ink-soft); }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--ink-faint); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+.tag { font-size:11px; background:var(--blue-soft); color:var(--blue-ink); border-radius:6px; padding:2px 7px; }
+#app { display:none; }
+.top-list { list-style:none; margin:0; padding:0; font-size:13px; }
+.top-list li { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid var(--line); }
+.two-col { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+@media (max-width:640px) { .two-col { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SpaceRank NYC — admin</h1>
+  <p class="sub">Leads and search analytics. Not linked from the public site.</p>
+
+  <div id="login" class="card">
+    <label for="key">Admin key</label>
+    <input type="password" id="key" placeholder="paste ADMIN_API_KEY">
+    <button onclick="signIn()">Sign in</button>
+    <p class="err" id="loginErr"></p>
+  </div>
+
+  <div id="app">
+    <div class="card">
+      <div class="stat-grid" id="stats">Loading…</div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <h3 style="margin-top:0">Top searched areas</h3>
+        <ul class="top-list" id="topAreas"></ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Top landlords by lead interest</h3>
+        <ul class="top-list" id="topLandlords"></ul>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Recent leads</h3>
+      <table>
+        <thead><tr><th>Received</th><th>Name</th><th>Email</th><th>Company</th><th>Interested in</th><th>Message</th></tr></thead>
+        <tbody id="leadsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const KEY_STORAGE = "sr_admin_key";
+
+async function api(path) {
+  const key = localStorage.getItem(KEY_STORAGE);
+  const r = await fetch(path, { headers: { "X-Admin-Key": key } });
+  if (r.status === 401) { localStorage.removeItem(KEY_STORAGE); showLogin("Invalid or expired key."); return null; }
+  return r;
+}
+
+function showLogin(err) {
+  document.getElementById("login").style.display = "block";
+  document.getElementById("app").style.display = "none";
+  const e = document.getElementById("loginErr");
+  e.textContent = err || "";
+  e.style.display = err ? "block" : "none";
+}
+
+async function signIn() {
+  const key = document.getElementById("key").value.trim();
+  if (!key) return;
+  localStorage.setItem(KEY_STORAGE, key);
+  await load();
+}
+
+function fmtDate(iso) {
+  try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+}
+
+// Leads are tenant-submitted, untrusted text — every field goes through this
+// before hitting innerHTML anywhere below (stored-XSS guard).
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+async function load() {
+  const statsRes = await api("/api/admin/stats");
+  if (!statsRes) return;
+  if (!statsRes.ok) { showLogin("Server error loading stats."); return; }
+  const stats = await statsRes.json();
+
+  const leadsRes = await api("/api/admin/leads?limit=100");
+  if (!leadsRes) return;
+  const leads = (await leadsRes.json()).leads;
+
+  document.getElementById("login").style.display = "none";
+  document.getElementById("app").style.display = "block";
+
+  const conv = stats.conversion_rate == null ? "—" : (stats.conversion_rate * 100).toFixed(1) + "%";
+  const avg = stats.avg_results_per_search == null ? "—" : stats.avg_results_per_search.toFixed(1);
+  document.getElementById("stats").innerHTML = `
+    <div class="stat"><div class="n">${stats.total_searches}</div><div class="l">searches</div></div>
+    <div class="stat"><div class="n">${stats.total_leads}</div><div class="l">leads</div></div>
+    <div class="stat"><div class="n">${conv}</div><div class="l">conversion rate</div></div>
+    <div class="stat"><div class="n">${avg}</div><div class="l">avg results / search</div></div>`;
+
+  document.getElementById("topAreas").innerHTML = stats.top_areas.length
+    ? stats.top_areas.map(a => `<li><span>${esc(a.area)}</span><span class="tag">${esc(a.count)}</span></li>`).join("")
+    : "<li>No searches logged yet.</li>";
+
+  document.getElementById("topLandlords").innerHTML = stats.top_landlords_by_interest.length
+    ? stats.top_landlords_by_interest.map(l => `<li><span>${esc(l.landlord)}</span><span class="tag">${esc(l.count)}</span></li>`).join("")
+    : "<li>No leads logged yet.</li>";
+
+  document.getElementById("leadsBody").innerHTML = leads.length
+    ? leads.map(l => `<tr>
+        <td>${esc(fmtDate(l.received_at))}</td>
+        <td>${esc(l.name)}</td>
+        <td>${esc(l.email)}</td>
+        <td>${esc(l.company) || "—"}</td>
+        <td>${esc(l.interested_in) || "—"}${l.landlord ? ` <span class="tag">${esc(l.landlord)}</span>` : ""}</td>
+        <td>${esc(l.message) || "—"}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="6">No leads yet.</td></tr>`;
+}
+
+if (localStorage.getItem(KEY_STORAGE)) { load(); } else { showLogin(); }
+</script>
+</body>
+</html>

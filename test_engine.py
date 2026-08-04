@@ -390,6 +390,56 @@ def test_lead_bounds_hostile_search_payload():
     # (the bounding itself is a validator — 12 keys x 200 chars max)
 
 
+def test_db_degrades_gracefully_without_database():
+    """No DATABASE_URL configured (the CI/default state) -> every db.py
+    function no-ops safely instead of raising."""
+    import db
+    saved = db.DATABASE_URL
+    db.DATABASE_URL = None
+    try:
+        assert db.insert_lead({"lead_id": "x", "received_at": "now", "name": "a",
+                               "email": "a@b.co", "company": "", "message": "",
+                               "interested_in": "", "landlord": "", "search": {}}) is False
+        assert db.fetch_leads() == []
+        assert db.fetch_stats() is None
+    finally:
+        db.DATABASE_URL = saved
+
+
+def test_db_connect_never_raises_on_bad_url():
+    """A malformed/unreachable DATABASE_URL must degrade to 'no database',
+    never crash a tenant-facing endpoint like /api/leads."""
+    import db
+    saved = db.DATABASE_URL
+    db.DATABASE_URL = "not-a-valid-connection-string"
+    try:
+        assert db._connect() is None
+    finally:
+        db.DATABASE_URL = saved
+
+
+def test_admin_requires_key():
+    c = _client()
+    assert c.get("/api/admin/leads").status_code == 401
+    assert c.get("/api/admin/stats").status_code == 401
+    assert c.get("/api/admin/leads", headers={"X-Admin-Key": "wrong"}).status_code == 401
+
+
+def test_admin_accepts_correct_key_and_handles_no_database():
+    """With the right key but no working DB in the test environment, the
+    leads endpoint returns an honest empty list rather than crashing."""
+    import app as app_module
+    saved = app_module.ADMIN_API_KEY
+    app_module.ADMIN_API_KEY = "test-key-123"
+    try:
+        c = _client()
+        r = c.get("/api/admin/leads", headers={"X-Admin-Key": "test-key-123"})
+        assert r.status_code == 200
+        assert r.json()["leads"] == []
+    finally:
+        app_module.ADMIN_API_KEY = saved
+
+
 def test_count_preview_shrinks_monotonically():
     """Adding a hard filter may only shrink (never grow) the live count."""
     from matching import count_spaces

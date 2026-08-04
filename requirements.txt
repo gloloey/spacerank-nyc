@@ -8,5 +8,6 @@ requests   # GET /api/geocode proxies NYC GeoSearch live, at request time
 # query-time embedding encoder for the deployed semantic backend (~40 MB, no PyTorch):
 onnxruntime
 tokenizers
+psycopg[binary]   # db.py — leads + search-analytics persistence (Postgres/Neon)
 # optional, LOCAL ONLY — full-precision embeddings via PyTorch (~2 GB):
 # sentence-transformers

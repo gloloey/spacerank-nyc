@@ -7,3 +7,4 @@ lxml
 sentence-transformers
 huggingface_hub
 httpx
+python-dotenv   # loads .env.local for db.py when running/testing locally

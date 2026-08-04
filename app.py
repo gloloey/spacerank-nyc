@@ -8,6 +8,10 @@ ENDPOINTS
   GET /api/landlords       ranked landlords (same params)
   GET /api/subway-stations typeahead search over real MTA station complexes
   GET /api/geocode         resolve a free-text address to lat/lng (NYC GeoSearch)
+  POST /api/leads          capture a tenant inquiry (log + Postgres if configured)
+  GET /admin                small dashboard for the two endpoints below
+  GET /api/admin/leads      [ADMIN_API_KEY] captured leads
+  GET /api/admin/stats      [ADMIN_API_KEY] search/conversion analytics
 
 Multi-value params: repeat ?area=...&area=... for several submarkets.
 `term` ("short"/"long") is accepted and ECHOED but never scored — it exists
@@ -31,10 +35,11 @@ import uuid
 from datetime import datetime, timezone
 
 import requests
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
+import db
 import price_model as _pm
 import semantic
 from landlord import rank_landlords
@@ -93,6 +98,12 @@ def home():
                       os.path.join(here, "index.html")):
         if os.path.exists(candidate):
             return FileResponse(candidate)
+
+
+@app.get("/admin")
+def admin_page():
+    here = os.path.dirname(os.path.abspath(__file__))
+    return FileResponse(os.path.join(here, "admin.html"))
 
 
 @app.get("/api/areas")
@@ -184,6 +195,7 @@ def match(property_type: str = Query("Office"),
                         anchor_lat=anchor_lat, anchor_lng=anchor_lng, anchor_label=anchor_label,
                         anchor_radius_mi=anchor_radius_mi)
     results = rank_spaces(req, top_n=top_n)
+    db.log_search_event(req, len(results))
     return {"results": results,
             "total_ranked": len(results),
             # `term` is stored/echoed for the future contact flow — by design
@@ -220,12 +232,13 @@ def landlords(property_type: str = Query("Office"),
 # ---------------------------------------------------------------------------
 # Lead capture — POST /api/leads
 # ---------------------------------------------------------------------------
-# HONEST PERSISTENCE NOTE: this deployment is serverless (Vercel functions
-# have no writable durable disk) and this project stores no secrets, so leads
-# are emitted as one structured JSON line to stdout — retrievable in the
-# Vercel dashboard under Logs (search "SPACERANK_LEAD"). The UI also offers
-# a prefilled email fallback so no inquiry can be lost. Durable storage
-# (Vercel KV / Postgres) is the documented next step and needs a credential.
+# HONEST PERSISTENCE NOTE: leads are always emitted as one structured JSON
+# line to stdout (retrievable in the Vercel dashboard under Logs, search
+# "SPACERANK_LEAD") AND, when DATABASE_URL is configured, written to Postgres
+# via db.insert_lead(). The log is never removed even with a DB present —
+# db.insert_lead() degrades to a no-op rather than raising, so a database
+# hiccup can never turn a tenant's form submission into a lost lead or a
+# 500. The UI also offers a prefilled email fallback on top of both.
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
 
@@ -268,6 +281,37 @@ def create_lead(lead: Lead):
               "received_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
               **lead.model_dump()}
     print(json.dumps(record, ensure_ascii=False), file=sys.stdout, flush=True)
+    persisted = db.insert_lead(record)
+    stored = "database + structured log" if persisted else "structured log (database not configured)"
     return {"ok": True, "lead_id": record["lead_id"],
             "message": "Request received — the leasing contact will hear from us.",
-            "stored": "structured log (serverless — durable DB is the documented next step)"}
+            "stored": stored}
+
+
+# ---------------------------------------------------------------------------
+# Admin — GET /api/admin/leads, GET /api/admin/stats
+# ---------------------------------------------------------------------------
+# Guarded by a single shared API key (env var ADMIN_API_KEY, set by Gabriel —
+# same "credential in, never hardcoded" pattern as DATABASE_URL). Fails
+# CLOSED: if ADMIN_API_KEY isn't set at all, every request is rejected
+# rather than the endpoint being wide open by default.
+
+ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY")
+
+
+def _require_admin(x_admin_key: str = Header(default="")):
+    if not ADMIN_API_KEY or x_admin_key != ADMIN_API_KEY:
+        raise HTTPException(401, "unauthorized")
+
+
+@app.get("/api/admin/leads")
+def admin_leads(limit: int = Query(200, le=1000), _admin: None = Depends(_require_admin)):
+    return {"leads": db.fetch_leads(limit)}
+
+
+@app.get("/api/admin/stats")
+def admin_stats(_admin: None = Depends(_require_admin)):
+    stats = db.fetch_stats()
+    if stats is None:
+        raise HTTPException(503, "database not configured")
+    return stats

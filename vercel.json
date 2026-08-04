@@ -7,11 +7,13 @@
       "config": {
         "includeFiles": [
           "app.py",
+          "db.py",
           "matching.py",
           "semantic.py",
           "landlord.py",
           "spaces_clean.csv",
           "index.html",
+          "admin.html",
           "static/**",
           "embeddings.npz",
           "models/**",
