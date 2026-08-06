@@ -302,6 +302,19 @@ class Lead(BaseModel):
             raise ValueError("not a valid email address")
         return v
 
+    @field_validator("phone")
+    @classmethod
+    def _valid_phone(cls, v: str) -> str:
+        # Optional field — only checked if something was submitted. Same
+        # plausibility bar as the frontend (7-14 digits once formatting is
+        # stripped), kept here too since the frontend check is only a UX
+        # nicety, not the source of truth — a client that skips it (or a
+        # direct API call) must still be caught.
+        v = v.strip()
+        if v and not (7 <= len(re.sub(r"\D", "", v)) <= 14):
+            raise ValueError("not a plausible phone number")
+        return v
+
     @field_validator("tenant_type")
     @classmethod
     def _valid_tenant_type(cls, v: str) -> str:

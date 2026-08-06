@@ -383,6 +383,17 @@ def test_lead_rejects_bad_input():
     assert c.post("/api/leads", json={"first_name": "A", "email": "a@b.co"}).status_code == 422  # no last name
 
 
+def test_lead_phone_plausibility():
+    """Phone is optional, but if given must be a plausible number (7-14
+    digits once formatting is stripped) — catches "12" or a stray partial
+    entry rather than silently accepting garbage."""
+    c = _client()
+    base = {"first_name": "A", "last_name": "B", "email": "a@b.co"}
+    assert c.post("/api/leads", json={**base, "phone": "12"}).status_code == 422
+    assert c.post("/api/leads", json={**base, "phone": "+1 212 555 0100"}).status_code == 201
+    assert c.post("/api/leads", json={**base, "phone": ""}).status_code == 201   # optional -> fine blank
+
+
 def test_lead_bounds_hostile_search_payload():
     """A hostile client can't log megabytes through the search echo."""
     r = _client().post("/api/leads", json={

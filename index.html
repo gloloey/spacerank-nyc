@@ -814,6 +814,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
         <select id="ld_cc" aria-label="Country code"></select>
         <input id="ld_phone" type="tel" maxlength="32" placeholder="212 555 0100" inputmode="tel" autocomplete="tel-national">
       </div>
+      <div class="fielderr" id="e_phone"></div>
       <label for="ld_msg">Anything else?</label>
       <textarea id="ld_msg" maxlength="2000" placeholder="Timing, headcount, must-haves…"></textarea>
       <div class="modalerr" id="leaderr"></div>
@@ -2276,8 +2277,8 @@ function openLead(kind, i) {
   $("leadpills").innerHTML = searchPills().map(p => `<span class="lpill">${esc(p)}</span>`).join("");
   $("leadform").style.display = "block"; $("leadok").style.display = "none";
   $("leaderr").style.display = "none";
-  ["ld_first", "ld_last", "ld_email"].forEach(id => $(id).classList.remove("bad"));
-  $("e_first").textContent = $("e_last").textContent = $("e_email").textContent = "";
+  ["ld_first", "ld_last", "ld_email", "ld_phone"].forEach(id => $(id).classList.remove("bad"));
+  $("e_first").textContent = $("e_last").textContent = $("e_email").textContent = $("e_phone").textContent = "";
   leadTenantType = "tenant";
   $("ld_tenanttype").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === "tenant"));
   returnFocusEl = document.activeElement;
@@ -2312,6 +2313,13 @@ async function sendLead() {
   flag("ld_first", "e_first", first.length < 1, "Please enter your first name.");
   flag("ld_last", "e_last", last.length < 1, "Please enter your last name.");
   flag("ld_email", "e_email", !/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email), "That doesn't look like a valid email.");
+  // Phone is optional — only validated if something was typed. A plausible
+  // NATIONAL number (the cc select carries the country code separately)
+  // is 7-14 digits once formatting characters are stripped; this catches
+  // "12" or a stray "555-" without needing a full phone-parsing library.
+  const phoneDigits = phoneNum.replace(/\D/g, "");
+  flag("ld_phone", "e_phone", phoneNum.length > 0 && (phoneDigits.length < 7 || phoneDigits.length > 14),
+    "That doesn't look like a complete phone number.");
   if (!ok) return;
   $("leadsend").disabled = true; $("leaderr").style.display = "none";
   progressStart();
