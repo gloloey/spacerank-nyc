@@ -84,7 +84,12 @@ button:focus-visible, a:focus-visible {
   outline: 2.5px solid var(--blue-solid);
   outline-offset: 2px;
 }
-.wrap { max-width:1180px; margin:0 auto; padding:0 22px; }
+.wrap { max-width:1180px; margin:0 auto; padding:0 22px; transition:max-width .3s ease; }
+/* on big monitors the 1180px cap left a wide dead zone on either side —
+   this scales the cap up in two steps rather than going fully fluid, so
+   line lengths / card widths stay comfortable instead of stretching thin */
+@media(min-width:1500px){ .wrap { max-width:1440px; } }
+@media(min-width:1900px){ .wrap { max-width:1680px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
 
 /* ============================== PROGRESS BAR =============================
@@ -180,6 +185,18 @@ button:focus-visible, a:focus-visible {
 /* -------- filter rail -------- */
 .rail { position:sticky; top:74px; display:flex; flex-direction:column; gap:14px; }
 @media(max-width:920px){ .rail { position:static; } }
+
+/* -------- pre-search: filters run horizontally across the full width,
+   instead of a narrow sidebar, so the first thing you see isn't a wall of
+   inputs squeezed into 340px. The FIRST search collapses this into the
+   normal sidebar (see enterSearchedLayout() in JS, which animates the
+   move with a FLIP transform) so the results grid gets its room. -------- */
+.layout.pre-search { grid-template-columns:1fr; }
+.layout.pre-search .rail { position:static; }
+.layout.pre-search #f { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); align-items:start; }
+.layout.pre-search .step { padding:18px 20px 20px; }
+.layout.pre-search .step + .step { border-top:none; border-left:1px solid var(--line2); }
+@media(max-width:920px){ .layout.pre-search .step + .step { border-left:none; border-top:1px solid var(--line2); } }
 .panel { background:var(--card); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow-1); }
 .step { padding:16px 18px 18px; }
 .step + .step { border-top:1px solid var(--line2); }
@@ -234,6 +251,11 @@ button:focus-visible, a:focus-visible {
 .quick { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .quick button { border:none; background:var(--blue-soft); color:var(--blue-ink); font-size:.72rem; font-weight:600; padding:4px 10px; border-radius:999px; cursor:pointer; transition:filter .12s; }
 .quick button:hover { filter:brightness(.93); }
+.morefilters { margin-top:12px; }
+.morefilters summary { font-size:.76rem; color:var(--blue); cursor:pointer; font-weight:600; list-style:none; }
+.morefilters summary::-webkit-details-marker { display:none; }
+.morefilters summary::before { content:"+ "; }
+.morefilters[open] summary::before { content:"– "; }
 
 /* "near a place" anchor search */
 .anchorwrap { position:relative; }
@@ -353,14 +375,21 @@ button:focus-visible, a:focus-visible {
    *during* animation-delay (staggered cards) and holds the visible end
    state after — but only while the animation itself is actually running. */
 @keyframes rise { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
-.bmain { display:flex; gap:16px; padding:16px 18px 12px; }
-.thumbwrap { position:relative; flex:0 0 118px; }
-.thumb { width:118px; height:96px; border-radius:12px; object-fit:cover; display:block; background:var(--bg2); transition:opacity .4s ease; }
-.thumb.mono { display:flex; align-items:center; justify-content:center; font-family:var(--disp); font-weight:800; font-size:1.3rem; color:var(--ink-faint); }
+/* padding-top is taller than the others on purpose — it reserves a clear
+   band above the thumbnail/ring row for .favtop (the like heart), so the
+   heart badge and the score ring (also top-right) can never overlap
+   regardless of how the ring's own flex alignment resolves. */
+.bmain { display:flex; gap:20px; padding:44px 22px 14px; position:relative; }
+.thumbwrap { position:relative; flex:0 0 168px; }
+.thumb { width:168px; height:136px; border-radius:12px; object-fit:cover; display:block; background:var(--bg2); transition:opacity .4s ease; }
+.thumb.mono { display:flex; align-items:center; justify-content:center; font-family:var(--disp); font-weight:800; font-size:1.6rem; color:var(--ink-faint); }
 .rankn { position:absolute; top:-7px; left:-7px; background:var(--ink); color:var(--bg); font-size:.68rem; font-weight:800; width:22px; height:22px; border-radius:8px; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-1); }
 .binfo { flex:1; min-width:0; }
-.brow1 { display:flex; align-items:flex-start; gap:10px; }
-.bname { font-family:var(--disp); font-weight:700; font-size:1.02rem; letter-spacing:-.01em; line-height:1.25; }
+.brow1 { display:flex; align-items:flex-start; gap:10px; padding-right:34px; }
+.bname { font-family:var(--disp); font-weight:700; font-size:1.14rem; letter-spacing:-.01em; line-height:1.25; }
+.baddr { display:flex; align-items:center; gap:6px; font-size:.78rem; color:var(--ink-soft); margin-top:3px; }
+.baddr .copybtn { padding:1px 5px; font-size:.66rem; }
+@media(min-width:1500px){ .thumbwrap { flex-basis:200px; } .thumb { width:200px; height:160px; } }
 .bmeta { display:flex; flex-wrap:wrap; gap:6px; margin:7px 0 9px; }
 .mchip { font-size:.7rem; color:var(--ink-soft); background:var(--card2); border:1px solid var(--line2); padding:2.5px 9px; border-radius:999px; }
 .mchip.ll { display:inline-flex; align-items:center; gap:5px; background:#0d1729; color:#fff; border-color:#0d1729; font-weight:600; }
@@ -423,6 +452,8 @@ button:focus-visible, a:focus-visible {
 .why b { color:var(--ink); }
 .bact { display:flex; align-items:center; gap:9px; padding:11px 18px; border-top:1px solid var(--line2); flex-wrap:wrap; }
 .bact .who { font-size:.76rem; color:var(--ink-soft); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.bact .who b { color:var(--ink); font-weight:700; font-size:.86rem; }
+.favtop { position:absolute; top:14px; right:14px; z-index:2; }
 .abtn { border:1px solid var(--line); background:var(--card); color:var(--ink); font-size:.76rem; font-weight:600; padding:6.5px 13px; border-radius:999px; cursor:pointer; transition:all .14s; white-space:nowrap; }
 .abtn:hover { border-color:var(--blue); color:var(--blue); transform:translateY(-1px); }
 .abtn.primary { background:var(--blue-solid); border-color:var(--blue-solid); color:#fff; }
@@ -480,11 +511,15 @@ button:focus-visible, a:focus-visible {
 .llsig .rsn mark { background:var(--amber-soft); color:var(--amber-ink); font-weight:600; padding:0 3px; border-radius:4px; }
 .llfoot { display:flex; align-items:center; gap:8px; border-top:1px solid var(--line2); padding-top:11px; font-size:.74rem; color:var(--ink-soft); flex-wrap:wrap; }
 .llfoot .who { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.llfoot .who b { color:var(--ink); font-weight:700; font-size:.86rem; }
 .sechead { font-family:var(--disp); font-weight:700; font-size:1.06rem; letter-spacing:-.015em; margin:30px 0 4px; display:flex; align-items:center; gap:9px; }
 .sechead .sub { font-family:var(--body); font-size:.76rem; font-weight:500; color:var(--ink-soft); }
 
 /* ============================== MAP ===================================== */
-.mapbox { display:none; height:520px; border-radius:var(--r); border:1px solid var(--line); overflow:hidden; box-shadow:var(--shadow-1); margin-bottom:16px; position:relative; z-index:1; }
+.mapbox { display:none; height:min(74vh, 760px); min-height:520px; border-radius:var(--r); border:1px solid var(--line); overflow:hidden; box-shadow:var(--shadow-1); margin-bottom:16px; position:relative; z-index:1; }
+.mapbox.show { display:block; animation:mapin .45s cubic-bezier(.2,.8,.25,1) both; }
+@keyframes mapin { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:none; } }
+@media(min-width:1500px){ .mapbox { height:min(78vh, 860px); } }
 #mapcanvas { position:absolute; inset:0; }
 .maplegend {
   position:absolute; left:12px; bottom:12px; z-index:450; background:var(--card); max-width:210px;
@@ -566,11 +601,16 @@ button:focus-visible, a:focus-visible {
 .modal h3 { font-family:var(--disp); margin:0 0 3px; font-size:1.08rem; }
 .modal .sub2 { font-size:.79rem; color:var(--ink-soft); margin:0 0 13px; }
 .modal label { display:block; font-size:.7rem; font-weight:700; color:var(--ink-soft); margin:11px 0 4px; text-transform:uppercase; letter-spacing:.05em; }
-.modal input, .modal textarea { width:100%; font:inherit; font-size:.88rem; padding:9.5px 12px; border:1.5px solid var(--line); border-radius:var(--r-sm); background:var(--card2); color:var(--ink); outline:none; transition:border-color .15s, box-shadow .15s; }
-.modal input:focus, .modal textarea:focus { border-color:var(--blue); box-shadow:0 0 0 3px color-mix(in srgb,var(--blue) 18%,transparent); }
+.modal input, .modal textarea, .modal select { width:100%; font:inherit; font-size:.88rem; padding:9.5px 12px; border:1.5px solid var(--line); border-radius:var(--r-sm); background:var(--card2); color:var(--ink); outline:none; transition:border-color .15s, box-shadow .15s; }
+.modal input:focus, .modal textarea:focus, .modal select:focus { border-color:var(--blue); box-shadow:0 0 0 3px color-mix(in srgb,var(--blue) 18%,transparent); }
 .modal textarea { min-height:70px; resize:vertical; }
 .modal input.bad, .modal textarea.bad { border-color:var(--danger); }
 .fielderr { font-size:.72rem; color:var(--danger); margin-top:3px; min-height:.9em; }
+.modal .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.phonerow { display:flex; gap:8px; }
+.phonerow select { flex:0 0 120px; }
+.phonerow input { flex:1; }
+.modal .seg { margin-top:2px; }
 .lpills { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px; }
 .lpill { font-size:.7rem; padding:3.5px 10px; border-radius:999px; background:var(--blue-soft); color:var(--blue-ink); font-weight:600; }
 .modalrow { display:flex; gap:10px; justify-content:flex-end; margin-top:19px; }
@@ -613,7 +653,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
   <div class="orline">…or build your own search below — the button always shows how many spaces currently fit.</div>
 </section>
 
-<main class="wrap layout">
+<main class="wrap layout pre-search" id="mainlayout">
   <aside class="rail">
     <form class="panel" id="f" autocomplete="off" tabindex="-1">
       <div class="step">
@@ -652,16 +692,21 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
             <span class="tip" data-t="Stored with your inquiry so the landlord knows — doesn't change the ranking.">?</span></label>
             <select id="term"><option value="">No preference</option><option value="short">Short (&lt; ~3 yrs)</option><option value="long">Long (3+ yrs)</option></select>
           </div>
-          <div class="field"><label for="style">Landlord type
-            <span class="tip" data-t="A small tiebreaker (+3 points), never a ranking driver. Institutional = public REIT; family-run = private family firm.">?</span></label>
-            <select id="style"><option value="">No preference</option></select>
-          </div>
-          <div class="field"><label for="fit">Space condition
-            <span class="tip" data-t="A small tiebreaker (+3 points), never a ranking driver. Parsed from each listing's own description — most don't mention it, and those are scored neutrally, never penalized.">?</span></label>
-            <select id="fit"><option value="">No preference</option></select>
-          </div>
         </div>
         <div class="quick" id="sizequick"></div>
+        <details class="morefilters">
+          <summary>More filters (landlord type, space condition)</summary>
+          <div class="frow" style="margin-top:10px">
+            <div class="field"><label for="style">Landlord type
+              <span class="tip" data-t="A small tiebreaker (+3 points), never a ranking driver. Institutional = public REIT; family-run = private family firm.">?</span></label>
+              <select id="style"><option value="">No preference</option></select>
+            </div>
+            <div class="field"><label for="fit">Space condition
+              <span class="tip" data-t="A small tiebreaker (+3 points), never a ranking driver. Parsed from each listing's own description — most don't mention it, and those are scored neutrally, never penalized.">?</span></label>
+              <select id="fit"><option value="">No preference</option></select>
+            </div>
+          </div>
+        </details>
       </div>
       <div class="step">
         <h3><span class="n">4</span> Describe the vibe <span class="opt">ranks, never filters</span></h3>
@@ -733,7 +778,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
 <aside class="drawer" id="drawer" aria-label="Saved buildings">
   <h3>Saved buildings <button class="x" id="drawerx" aria-label="Close saved buildings panel">✕</button></h3>
   <div class="body" id="favlist"></div>
-  <div class="dfoot">Saved on this device only. Use "Request intro" on a card to contact the owner.</div>
+  <div class="dfoot">Saved on this device only. Use "Request Intro" on a card to contact the owner.</div>
 </aside>
 
 <div class="modalback" id="leadback" role="dialog" aria-modal="true" aria-labelledby="leadtitle">
@@ -742,14 +787,33 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
       <h3 id="leadtitle">Request an intro</h3>
       <p class="sub2" id="leadsub"></p>
       <div class="lpills" id="leadpills"></div>
-      <label for="ld_name">Your name *</label>
-      <input id="ld_name" maxlength="120" autocomplete="name">
-      <div class="fielderr" id="e_name"></div>
+      <div class="row2">
+        <div>
+          <label for="ld_first">First name *</label>
+          <input id="ld_first" maxlength="80" autocomplete="given-name">
+          <div class="fielderr" id="e_first"></div>
+        </div>
+        <div>
+          <label for="ld_last">Last name *</label>
+          <input id="ld_last" maxlength="80" autocomplete="family-name">
+          <div class="fielderr" id="e_last"></div>
+        </div>
+      </div>
+      <label for="ld_company">Company</label>
+      <input id="ld_company" maxlength="160" autocomplete="organization">
+      <label>I am a…</label>
+      <div class="seg" id="ld_tenanttype" style="grid-template-columns:1fr 1fr">
+        <button type="button" data-v="tenant" class="on">Tenant</button>
+        <button type="button" data-v="broker">Broker</button>
+      </div>
       <label for="ld_email">Work email *</label>
       <input id="ld_email" maxlength="254" autocomplete="email" inputmode="email">
       <div class="fielderr" id="e_email"></div>
-      <label for="ld_company">Company</label>
-      <input id="ld_company" maxlength="160" autocomplete="organization">
+      <label for="ld_phone">Phone</label>
+      <div class="phonerow">
+        <select id="ld_cc" aria-label="Country code"></select>
+        <input id="ld_phone" type="tel" maxlength="32" placeholder="212 555 0100" inputmode="tel" autocomplete="tel-national">
+      </div>
       <label for="ld_msg">Anything else?</label>
       <textarea id="ld_msg" maxlength="2000" placeholder="Timing, headcount, must-haves…"></textarea>
       <div class="modalerr" id="leaderr"></div>
@@ -762,7 +826,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
       <div class="big">✓</div>
       <h3>Request received</h3>
       <p id="leadokmsg"></p>
-      <p id="leadmailp" style="display:none">Prefer email? <a id="leadmail" href="#">Open a prefilled draft ↗</a></p>
+      <p id="leadoknote" style="font-size:.8rem;color:var(--ink-soft)"></p>
       <div class="modalrow" style="justify-content:center"><button type="button" onclick="closeLead()">Done</button></div>
     </div>
   </div>
@@ -985,7 +1049,7 @@ function renderAnchorDrop() {
   if (!anchorItems.length) {
     const q = $("anchorq").value.trim();
     drop.innerHTML = `<div class="empty">${q.length >= 3
-      ? "No subway stations match — press Enter to search this as an address."
+      ? "No matches — NYC addresses and subway stations only (no business names yet)."
       : "Keep typing a station name or address…"}</div>`;
     drop.hidden = false;
     return;
@@ -994,24 +1058,18 @@ function renderAnchorDrop() {
     const cls = "opt" + (it.type === "address" ? " addr" : "") + (i === anchorHi ? " hi" : "");
     return it.type === "station"
       ? `<div class="${cls}" data-i="${i}"><b>🚇 ${esc(it.label)}</b><span>${esc(it.borough)} · ${esc(it.routes)}</span></div>`
-      : `<div class="${cls}" data-i="${i}"><b>🔎 Search “${esc(it.label)}” as an address</b></div>`;
+      : `<div class="${cls}" data-i="${i}"><b>📍 ${esc(it.label)}</b></div>`;
   }).join("");
   drop.hidden = false;
   drop.querySelectorAll(".opt").forEach(el => el.addEventListener("click", () => selectAnchorItem(+el.dataset.i)));
 }
-async function selectAnchorItem(i) {
+function selectAnchorItem(i) {
   const it = anchorItems[i];
   if (!it) return;
-  if (it.type === "station") { setAnchor({ label: it.label, lat: it.lat, lng: it.lng }); return; }
-  $("anchorq").disabled = true;
-  progressStart();
-  try {
-    const r = await fetch("/api/geocode?" + new URLSearchParams({ q: it.label }));
-    const d = await r.json();
-    if (d.found) setAnchor({ label: d.label, lat: d.lat, lng: d.lng });
-    else toast(`Couldn't find "${it.label}" — try a fuller street address`);
-  } catch (e) { toast("Couldn't reach the geocoder — try again"); }
-  finally { $("anchorq").disabled = false; hideAnchorDrop(); progressDone(); }
+  // Both station AND address suggestions already carry lat/lng — the
+  // /api/geocode-suggest results embed coordinates per candidate, so
+  // picking one is instant, no second round-trip to the geocoder needed.
+  setAnchor({ label: it.label, lat: it.lat, lng: it.lng });
 }
 function renderAnchorLoading() {
   const drop = $("anchordrop");
@@ -1033,12 +1091,25 @@ $("anchorq").addEventListener("input", () => {
     try {
       if (anchorCtrl) anchorCtrl.abort();
       anchorCtrl = new AbortController();
-      const r = await fetch("/api/subway-stations?" + new URLSearchParams({ q }), { signal: anchorCtrl.signal });
+      const sig = anchorCtrl.signal;
+      // Stations + real live address candidates fetched together — every
+      // address suggestion already carries its own lat/lng (unlike the old
+      // single "search this as an address" placeholder, which needed a
+      // second round-trip AFTER you picked it). Business names ("Starbucks")
+      // honestly return nothing here: NYC's free GeoSearch API indexes
+      // streets/addresses only, not venues — confirmed, not assumed.
+      const [rs, ra] = await Promise.all([
+        fetch("/api/subway-stations?" + new URLSearchParams({ q }), { signal: sig }),
+        q.length >= 3 ? fetch("/api/geocode-suggest?" + new URLSearchParams({ q }), { signal: sig }) : null,
+      ]);
       if (seq !== anchorSeq) return;
-      const d = await r.json();
-      anchorItems = (d.results || []).map(s =>
-        ({ type: "station", label: s.name, borough: s.borough, routes: s.routes, lat: s.lat, lng: s.lng }));
-      if (q.length >= 3) anchorItems.push({ type: "address", label: q });
+      const ds = await rs.json();
+      const da = ra ? await ra.json() : { results: [] };
+      anchorItems = [
+        ...(ds.results || []).map(s =>
+          ({ type: "station", label: s.name, borough: s.borough, routes: s.routes, lat: s.lat, lng: s.lng })),
+        ...(da.results || []).map(a => ({ type: "address", label: a.label, lat: a.lat, lng: a.lng })),
+      ];
       anchorHi = -1;
       renderAnchorDrop();
     } catch (e) {
@@ -1445,7 +1516,44 @@ const SKELETON = `<div class="skel"><div class="sk" style="width:118px;height:96
 let allGroups = [], lastLandlords = [], shown = 0;
 const PAGE = 10;
 
+/* ---------------- pre-search -> sidebar layout transition --------------
+   Uses the FLIP technique (First-Last-Invert-Play): measure the rail's
+   bounding box BEFORE the layout swap, swap the layout classes (which
+   reflows the DOM instantly — steps go from a horizontal grid to a
+   vertical stack), measure the box AFTER, then paint the rail at its OLD
+   position/size via an inverse transform and let one CSS transition
+   animate that transform back to identity. The browser only ever
+   animates a transform, never the underlying grid — so the discrete
+   reflow is invisible and the eye reads it as one smooth, physical move
+   into the sidebar. A brief opacity dip masks the instant that the
+   4 steps themselves re-stack (that part isn't smoothly animatable, so
+   it's hidden rather than left to visibly snap). */
+function enterSearchedLayout() {
+  const layout = $("mainlayout");
+  if (!layout.classList.contains("pre-search")) return;
+  const rail = document.querySelector(".rail");
+  const before = rail.getBoundingClientRect();
+  rail.style.opacity = ".35";
+  layout.classList.remove("pre-search");
+  const after = rail.getBoundingClientRect();
+  const dx = before.left - after.left, dy = before.top - after.top;
+  const sx = after.width ? before.width / after.width : 1;
+  const sy = after.height ? before.height / after.height : 1;
+  rail.style.transition = "none";
+  rail.style.transformOrigin = "top left";
+  rail.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+  requestAnimationFrame(() => {
+    rail.style.transition = "transform .55s cubic-bezier(.2,.8,.2,1), opacity .4s ease .1s";
+    rail.style.transform = "none";
+    rail.style.opacity = "1";
+  });
+  rail.addEventListener("transitionend", () => {
+    rail.style.transition = rail.style.transformOrigin = rail.style.transform = "";
+  }, { once: true });
+}
+
 async function doSearch() {
+  enterSearchedLayout();
   writeUrl();
   progressStart();
   $("go").disabled = true;
@@ -1467,7 +1575,7 @@ async function doSearch() {
         <b>No available spaces could be ranked for this search.</b><br>
         Try ${noResultsTips()} —
         the counter on the Search button updates as you do.</div>`;
-      $("bigmap").style.display = "none";
+      $("bigmap").classList.remove("show");
     } else {
       $("rtool").hidden = false;
       $("countline").innerHTML = `<b>${m.results.length}</b> spaces ranked across <b>${allGroups.length}</b> buildings — every listing is scored, keep scrolling.`;
@@ -1530,7 +1638,7 @@ function signalBars(sig, top) {
   if (!used.size) cell("size", 0, "You didn't give a size range, so size isn't scored for anyone — it can neither help nor hurt this listing.", "—");
   else cell("size", Math.round(100 * sig.size), "100% = inside your square-footage range; drops off the further outside it is.");
   if (!used.budget) cell("budget", 0, "You didn't set a budget, so price isn't scored for anyone.", "—");
-  else if (!rentKnown) cell("budget", 0, "This landlord doesn't publish the rent ('upon request'). We refuse to guess — unknown price is scored neutrally so it can't punish or reward this listing. Ask via Request intro.", "n/a");
+  else if (!rentKnown) cell("budget", 0, "This landlord doesn't publish the rent ('upon request'). We refuse to guess — unknown price is scored neutrally so it can't punish or reward this listing. Ask via Request Intro.", "n/a");
   else cell("budget", Math.round(100 * sig.budget), "100% = the published rent is within your budget; drops off with the % over.");
   if (!used.geo) cell("area", 0, "You didn't pick any areas or a place to search near, so location isn't scored — all of NYC is fair game.", "—");
   else if (!geoKnown) cell("area", 0, "We couldn't verify this building's exact coordinates, so distance is scored neutrally rather than invented.", "n/a");
@@ -1549,9 +1657,24 @@ function suiteRow(s) {
     const m = PRICE_MODEL_META;
     rent = `<span class="estchip" data-tt="A MODEL ESTIMATE, not a quoted price — the landlord publishes no rent here. Predicted from building fundamentals (size, age, floors, location) by a small ridge-regression model trained on the ${m ? m.n_train : "few"} rents that ARE published (typical error ±$${m ? m.loo_mae.toFixed(0) : "?"}/SF, honest range shown). It never affects the ranking.">≈ ${esc(s.rent_estimate.label)}</span>`;
   } else rent = esc(s.rent) || "rent on request";
-  return `<div class="suiterow"><span class="sname">${esc(s.suite) || "Space"}</span>
+  // "Available — contact for space/floor details" is the DATA's honest way
+  // of saying no per-suite breakdown exists for this building (a handful of
+  // landlords only publish building-level availability). Leading with
+  // "Available" here is redundant — the listing is only ever shown because
+  // it IS available — so that word is dropped; the actually useful part
+  // (no suite breakdown, contact for details) stays.
+  const suiteName = (esc(s.suite) || "Space").replace(/^Available\s*[—-]\s*/i, "");
+  return `<div class="suiterow"><span class="sname">${suiteName}</span>
     <span class="sinfo">${fmt(s.size_sqft)} sf · ${rent}
     <span class="schip" style="background:color-mix(in srgb, ${col} 14%, transparent); color:${col}">${s.score}</span></span></div>`;
+}
+/* A few scrapers' raw address text repeats its own first segment
+   ("619 West 54th Street, 619 West 54th Street, New York, NY") — a
+   display-only cleanup, never touches the underlying data. */
+function cleanAddress(addr) {
+  const parts = (addr || "").trim().split(",").map(p => p.trim());
+  if (parts.length > 1 && parts[0] && parts[0] === parts[1]) parts.splice(1, 1);
+  return parts.join(", ").replace(/\.$/, "");
 }
 function mailtoHref(email, g) {
   const term = $("term").value;
@@ -1609,8 +1732,8 @@ function groupCard(g, i) {
   const top = g.spaces[0];
   const mail = top.contact.match(/<(.+)>/);
   const who = mail
-    ? `${esc(top.contact.split("<")[0].trim())} — <a href="${mailtoHref(mail[1], g)}">${mail[1]}</a>`
-    : `${esc(top.contact)}`;
+    ? `<b>${esc(top.contact.split("<")[0].trim())}</b> — <a href="${mailtoHref(mail[1], g)}">${mail[1]}</a>`
+    : `<b>${esc(top.contact)}</b>`;
   const photo = top.image
     ? `<img class="thumb" src="${top.image}" alt="${esc(g.building)}" loading="lazy" style="opacity:0"
          onload="this.style.opacity=1"
@@ -1618,11 +1741,17 @@ function groupCard(g, i) {
     : `<div class="thumb mono">${monogram(g.building)}</div>`;
   const first = g.spaces.slice(0, 3), rest = g.spaces.slice(3);
   const k = favKey(g);
+  const addr = cleanAddress(top.address);
   return `<div class="bcard" id="card-${i}" style="animation-delay:${Math.min(i % PAGE, 6) * 55}ms">
     <div class="bmain">
+      <button class="fav favtop ${favs[k] ? "on" : ""}" data-favkey="${esc(k)}" title="Save"
+        aria-label="${favs[k] ? "Remove from saved" : "Save this building"}" onclick="toggleFav(${i})">♥</button>
       <div class="thumbwrap">${photo}<span class="rankn">${i + 1}</span></div>
       <div class="binfo">
         <div class="brow1"><span class="bname">${esc(g.building)}</span></div>
+        ${addr ? `<div class="baddr"><span>📍 ${esc(addr)}</span>
+          <button class="copybtn" data-tt="Copy address" aria-label="Copy address" onclick="copyAddress('${addr.replace(/'/g, "\\'")}')">⧉</button>
+          <a class="copybtn" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none" data-tt="Open in Google Maps" aria-label="Open in Google Maps" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}">↗</a></div>` : ""}
         <div class="bmeta">${llchip(g.landlord)}
           ${top.landlord_style ? `<span class="mchip style ttd" data-tt="Institutional = public REIT. Family-run = private family firm. A small tiebreaker in ranking, never a driver.">${top.landlord_style === "institutional" ? "Institutional" : "Family-run"}</span>` : ""}
           ${summaryChip(g.spaces)}
@@ -1642,10 +1771,8 @@ function groupCard(g, i) {
     <div class="bact">
       <span class="who">${who}</span>
       ${mail ? `<button class="copybtn" data-tt="Copy email address" aria-label="Copy email address" onclick="copyEmail('${mail[1]}')">⧉</button>` : ""}
-      <button class="fav ${favs[k] ? "on" : ""}" data-favkey="${esc(k)}" title="Save"
-        aria-label="${favs[k] ? "Remove from saved" : "Save this building"}" onclick="toggleFav(${i})">♥</button>
-      <a class="abtn" href="${top.url}" target="_blank" rel="noopener">Listing ↗</a>
-      <button class="abtn primary" onclick="openLead('g', ${i})">Request intro</button>
+      <a class="abtn" href="${top.url}" target="_blank" rel="noopener">View Listing ↗</a>
+      <button class="abtn primary" onclick="openLead('g', ${i})">Request Intro</button>
     </div>
   </div>`;
 }
@@ -1668,8 +1795,8 @@ const LL_TT = {
 function llcard(r, i) {
   const mail = r.contact.match(/<(.+)>/);
   const who = mail
-    ? `${esc(r.contact.split("<")[0].trim())} — <a href="mailto:${mail[1]}">${mail[1]}</a>`
-    : esc(r.contact || "via landlord site");
+    ? `<b>${esc(r.contact.split("<")[0].trim())}</b> — <a href="mailto:${mail[1]}">${mail[1]}</a>`
+    : `<b>${esc(r.contact || "via landlord site")}</b>`;
   const copy = mail ? `<button class="copybtn" data-tt="Copy email address" aria-label="Copy email address" onclick="copyEmail('${mail[1]}')">⧉</button>` : "";
   const spec = r.specialization, str = r.match_strength;
   const specPct = Math.round(100 * spec.score);
@@ -1692,12 +1819,16 @@ function llcard(r, i) {
       <i class="track teal"><b style="--w:${strPct || 0}%"></b></i><div class="rsn">${strReason}</div></div>
     ${topList}
     <div class="llfoot"><span class="who">${who}</span>${copy}
-      <button class="abtn primary" onclick="openLead('l', ${i})">Request intro</button></div>
+      <button class="abtn primary" onclick="openLead('l', ${i})">Request Intro</button></div>
   </div>`;
 }
 function copyEmail(e) {
   navigator.clipboard.writeText(e).then(() => toast("Email copied: " + e))
     .catch(() => toast("Couldn't copy — " + e));
+}
+function copyAddress(a) {
+  navigator.clipboard.writeText(a).then(() => toast("Address copied: " + a))
+    .catch(() => toast("Couldn't copy — " + a));
 }
 
 /* ---------------- map: dual-mode (Google if key, else Leaflet+Carto) ---- */
@@ -1708,7 +1839,7 @@ function setView(v) {
   curView = v;
   $("viewtog").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
   const showMap = v === "map" && allGroups.length;
-  $("bigmap").style.display = showMap ? "block" : "none";
+  $("bigmap").classList.toggle("show", showMap);
   $("mapnote").style.display = showMap ? "block" : "none";
   $("spaces").style.display = showMap ? "none" : "block";
   $("showmore").style.display = showMap ? "none" : (allGroups.length > shown ? "block" : "none");
@@ -2084,7 +2215,41 @@ function drawGoogleMap() {
 }
 
 /* ---------------- lead capture (same honest flow as v0.7) --------------- */
-let leadCtx = null;
+/* Curated common-country dial-code list (not the full ISO 3166 set — this
+   covers the countries realistically relevant to a NYC CRE audience; easy
+   to extend). Flag emoji is COMPUTED from the ISO2 code via the regional-
+   indicator-symbol trick (each letter A-Z maps to U+1F1E6..U+1F1FF, so
+   "US" -> 🇺🇸) rather than typed out by hand, so there's no chance of a
+   mismatched flag/country pair. */
+const CC_LIST = [
+  ["US", "1", "United States"], ["CA", "1", "Canada"], ["GB", "44", "United Kingdom"],
+  ["IL", "972", "Israel"], ["IE", "353", "Ireland"], ["FR", "33", "France"],
+  ["DE", "49", "Germany"], ["IT", "39", "Italy"], ["ES", "34", "Spain"],
+  ["PT", "351", "Portugal"], ["NL", "31", "Netherlands"], ["BE", "32", "Belgium"],
+  ["CH", "41", "Switzerland"], ["AT", "43", "Austria"], ["SE", "46", "Sweden"],
+  ["NO", "47", "Norway"], ["DK", "45", "Denmark"], ["FI", "358", "Finland"],
+  ["PL", "48", "Poland"], ["GR", "30", "Greece"], ["TR", "90", "Turkey"],
+  ["RU", "7", "Russia"], ["UA", "380", "Ukraine"], ["RO", "40", "Romania"],
+  ["CZ", "420", "Czechia"], ["HU", "36", "Hungary"],
+  ["CN", "86", "China"], ["JP", "81", "Japan"], ["KR", "82", "South Korea"],
+  ["IN", "91", "India"], ["SG", "65", "Singapore"], ["HK", "852", "Hong Kong"],
+  ["AE", "971", "United Arab Emirates"], ["SA", "966", "Saudi Arabia"],
+  ["MX", "52", "Mexico"], ["BR", "55", "Brazil"], ["AR", "54", "Argentina"],
+  ["CO", "57", "Colombia"], ["CL", "56", "Chile"],
+  ["AU", "61", "Australia"], ["NZ", "64", "New Zealand"],
+  ["ZA", "27", "South Africa"], ["EG", "20", "Egypt"], ["NG", "234", "Nigeria"],
+];
+function flagEmoji(iso2) {
+  return String.fromCodePoint(...[...iso2].map(c => 127397 + c.charCodeAt(0)));
+}
+$("ld_cc").innerHTML = CC_LIST.map(([iso, dial, name]) =>
+  `<option value="${dial}">${flagEmoji(iso)} +${dial} ${name}</option>`).join("");
+
+let leadCtx = null, leadTenantType = "tenant";
+$("ld_tenanttype").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+  leadTenantType = b.dataset.v;
+  $("ld_tenanttype").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+}));
 function searchPills() {
   const pills = [curType];
   if ($("smin").value || $("smax").value) pills.push(`${$("smin").value || "?"}–${$("smax").value || "?"} sq ft`);
@@ -2111,11 +2276,13 @@ function openLead(kind, i) {
   $("leadpills").innerHTML = searchPills().map(p => `<span class="lpill">${esc(p)}</span>`).join("");
   $("leadform").style.display = "block"; $("leadok").style.display = "none";
   $("leaderr").style.display = "none";
-  ["ld_name", "ld_email"].forEach(id => $(id).classList.remove("bad"));
-  $("e_name").textContent = $("e_email").textContent = "";
+  ["ld_first", "ld_last", "ld_email"].forEach(id => $(id).classList.remove("bad"));
+  $("e_first").textContent = $("e_last").textContent = $("e_email").textContent = "";
+  leadTenantType = "tenant";
+  $("ld_tenanttype").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === "tenant"));
   returnFocusEl = document.activeElement;
   $("leadback").classList.add("open");
-  $("ld_name").focus();
+  $("ld_first").focus();
 }
 function closeLead() {
   $("leadback").classList.remove("open");
@@ -2135,21 +2302,25 @@ function leadSearchEcho() {
   return o;
 }
 async function sendLead() {
-  const name = $("ld_name").value.trim(), email = $("ld_email").value.trim();
+  const first = $("ld_first").value.trim(), last = $("ld_last").value.trim(),
+        email = $("ld_email").value.trim(), phoneNum = $("ld_phone").value.trim();
   let ok = true;
   const flag = (id, eid, bad, msg) => {
     $(id).classList.toggle("bad", bad); $(eid).textContent = bad ? msg : "";
     if (bad) ok = false;
   };
-  flag("ld_name", "e_name", name.length < 2, "Please enter your name.");
+  flag("ld_first", "e_first", first.length < 1, "Please enter your first name.");
+  flag("ld_last", "e_last", last.length < 1, "Please enter your last name.");
   flag("ld_email", "e_email", !/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email), "That doesn't look like a valid email.");
   if (!ok) return;
   $("leadsend").disabled = true; $("leaderr").style.display = "none";
   progressStart();
   try {
+    const phone = phoneNum ? `+${$("ld_cc").value} ${phoneNum}` : "";
     const r = await fetch("/api/leads", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email,
+      body: JSON.stringify({ first_name: first, last_name: last, email, phone,
+        tenant_type: leadTenantType,
         company: $("ld_company").value.trim(), message: $("ld_msg").value.trim(),
         interested_in: leadCtx.interested_in, landlord: leadCtx.landlord,
         search: leadSearchEcho() }),
@@ -2157,15 +2328,10 @@ async function sendLead() {
     if (!r.ok) throw new Error(`The server answered ${r.status}.`);
     const d = await r.json();
     $("leadform").style.display = "none"; $("leadok").style.display = "block";
-    $("leadokmsg").textContent = `Your request for ${leadCtx.interested_in} is in (ref ${d.lead_id}).`;
-    if (leadCtx.email) {
-      $("leadmailp").style.display = "block";
-      $("leadmail").href = `mailto:${leadCtx.email}?subject=${encodeURIComponent(
-        `Intro request: ${leadCtx.interested_in} (via SpaceRank NYC)`)}&body=${encodeURIComponent(
-        `Hello,\n\nI'm interested in ${leadCtx.interested_in}.\n\n` +
-        searchPills().map(p => "- " + p).join("\n") +
-        `\n\n${$("ld_msg").value.trim()}\n\n${name}${$("ld_company").value.trim() ? " — " + $("ld_company").value.trim() : ""}`)}`;
-    } else $("leadmailp").style.display = "none";
+    $("leadokmsg").textContent = `Your request for ${leadCtx.interested_in} is in.`;
+    $("leadoknote").textContent = d.tenant_confirmed
+      ? "A confirmation email is on its way to you, and the leasing contact has been notified."
+      : "The leasing contact has your details and will follow up.";
   } catch (err) {
     $("leaderr").textContent = "⚠ Couldn't send the request (" + (err.message || "network error") +
       ") — please try again" + (leadCtx.email ? ` or email ${leadCtx.email} directly.` : ".");

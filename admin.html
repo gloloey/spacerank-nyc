@@ -97,7 +97,7 @@ th { color:var(--ink-faint); font-weight:600; font-size:11px; text-transform:upp
     <div class="card">
       <h3 style="margin-top:0">Recent leads</h3>
       <table>
-        <thead><tr><th>Received</th><th>Name</th><th>Email</th><th>Company</th><th>Interested in</th><th>Message</th></tr></thead>
+        <thead><tr><th>Received</th><th>Name</th><th>Type</th><th>Email</th><th>Phone</th><th>Company</th><th>Interested in</th><th>Message</th></tr></thead>
         <tbody id="leadsBody"></tbody>
       </table>
     </div>
@@ -173,13 +173,15 @@ async function load() {
   document.getElementById("leadsBody").innerHTML = leads.length
     ? leads.map(l => `<tr>
         <td>${esc(fmtDate(l.received_at))}</td>
-        <td>${esc(l.name)}</td>
+        <td>${esc(`${l.first_name} ${l.last_name}`.trim())}</td>
+        <td>${esc(l.tenant_type) || "—"}</td>
         <td>${esc(l.email)}</td>
+        <td>${esc(l.phone) || "—"}</td>
         <td>${esc(l.company) || "—"}</td>
         <td>${esc(l.interested_in) || "—"}${l.landlord ? ` <span class="tag">${esc(l.landlord)}</span>` : ""}</td>
         <td>${esc(l.message) || "—"}</td>
       </tr>`).join("")
-    : `<tr><td colspan="6">No leads yet.</td></tr>`;
+    : `<tr><td colspan="8">No leads yet.</td></tr>`;
 }
 
 if (localStorage.getItem(KEY_STORAGE)) { load(); } else { showLogin(); }

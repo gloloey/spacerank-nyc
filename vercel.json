@@ -8,6 +8,7 @@
         "includeFiles": [
           "app.py",
           "db.py",
+          "email_notify.py",
           "matching.py",
           "semantic.py",
           "landlord.py",

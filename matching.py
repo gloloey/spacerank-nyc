@@ -519,6 +519,7 @@ def rank_spaces(req: TenantRequest, top_n: int = 5, csv_path: str | None = None)
             "landlord": _s(row["landlord"]),
             "landlord_style": style,
             "building": _s(row["building_name"]),
+            "address": _s(row["address"]),
             "suite": _s(row["floor_suite"]),
             "size_sqft": _n(row["size_sqft"]),
             "rent": _s(row["rent"]),

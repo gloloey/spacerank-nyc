@@ -35,14 +35,25 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS leads (
     lead_id TEXT PRIMARY KEY,
     received_at TIMESTAMPTZ NOT NULL,
-    name TEXT NOT NULL,
+    first_name TEXT NOT NULL DEFAULT '',
+    last_name TEXT NOT NULL DEFAULT '',
     email TEXT NOT NULL,
+    phone TEXT NOT NULL DEFAULT '',
     company TEXT NOT NULL DEFAULT '',
+    tenant_type TEXT NOT NULL DEFAULT '',
     message TEXT NOT NULL DEFAULT '',
     interested_in TEXT NOT NULL DEFAULT '',
     landlord TEXT NOT NULL DEFAULT '',
     search JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+-- migration for a table created before the first_name/last_name/phone/
+-- tenant_type split (pre-launch, only test leads existed — safe to drop
+-- the old single "name" column rather than carry a legacy fallback).
+ALTER TABLE leads DROP COLUMN IF EXISTS name;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS first_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS tenant_type TEXT NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS search_events (
     id BIGSERIAL PRIMARY KEY,
     happened_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -91,12 +102,13 @@ def insert_lead(record: dict) -> bool:
         _ensure_schema(conn)
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO leads (lead_id, received_at, name, email, company,
-                       message, interested_in, landlord, search)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """INSERT INTO leads (lead_id, received_at, first_name, last_name, email,
+                       phone, company, tenant_type, message, interested_in, landlord, search)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (lead_id) DO NOTHING""",
-                (record["lead_id"], record["received_at"], record["name"],
-                 record["email"], record["company"], record["message"],
+                (record["lead_id"], record["received_at"], record["first_name"],
+                 record["last_name"], record["email"], record["phone"],
+                 record["company"], record["tenant_type"], record["message"],
                  record["interested_in"], record["landlord"],
                  Json(record["search"])),
             )
@@ -140,8 +152,8 @@ def fetch_leads(limit: int = 200) -> list:
         _ensure_schema(conn)
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT lead_id, received_at, name, email, company, message,
-                          interested_in, landlord, search
+                """SELECT lead_id, received_at, first_name, last_name, email, phone,
+                          company, tenant_type, message, interested_in, landlord, search
                    FROM leads ORDER BY received_at DESC LIMIT %s""", (limit,))
             cols = [d.name for d in cur.description]
             rows = cur.fetchall()

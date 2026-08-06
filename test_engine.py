@@ -88,8 +88,9 @@ def test_rank_spaces_shape_and_order():
     scores = [r["score"] for r in res]
     assert scores == sorted(scores, reverse=True)     # descending
     assert all(0 <= s <= 100 for s in scores)
-    for key in ("landlord", "building", "reason", "signals", "contact"):
+    for key in ("landlord", "building", "address", "reason", "signals", "contact"):
         assert key in res[0]
+    assert all(isinstance(r["address"], str) for r in res)   # never None — always at least ""
 
 
 def test_rank_spaces_geo_actually_moves_ranking():
@@ -364,7 +365,8 @@ def test_areas_exposes_dataset_freshness():
 
 def test_lead_valid_is_accepted_and_echoed_safely():
     r = _client().post("/api/leads", json={
-        "name": "Test Tenant", "email": "tenant@example.com",
+        "first_name": "Test", "last_name": "Tenant", "email": "tenant@example.com",
+        "phone": "+1 212 555 0100", "tenant_type": "tenant",
         "company": "ACME", "message": "hello",
         "interested_in": "171 Madison Avenue", "landlord": "GFP Real Estate",
         "search": {"property_type": "Office", "term": "long"}})
@@ -376,18 +378,27 @@ def test_lead_valid_is_accepted_and_echoed_safely():
 
 def test_lead_rejects_bad_input():
     c = _client()
-    assert c.post("/api/leads", json={"name": "X Y", "email": "nope"}).status_code == 422
+    assert c.post("/api/leads", json={"first_name": "X", "last_name": "Y", "email": "nope"}).status_code == 422
     assert c.post("/api/leads", json={"email": "a@b.co"}).status_code == 422
-    assert c.post("/api/leads", json={"name": "A", "email": "a@b.co"}).status_code == 422  # 1-char name
+    assert c.post("/api/leads", json={"first_name": "A", "email": "a@b.co"}).status_code == 422  # no last name
 
 
 def test_lead_bounds_hostile_search_payload():
     """A hostile client can't log megabytes through the search echo."""
     r = _client().post("/api/leads", json={
-        "name": "AB", "email": "a@b.co",
+        "first_name": "A", "last_name": "B", "email": "a@b.co",
         "search": {str(i): "x" * 10000 for i in range(60)}})
     assert r.status_code == 201                # accepted, but bounded:
     # (the bounding itself is a validator — 12 keys x 200 chars max)
+
+
+def test_lead_tenant_type_bad_value_becomes_blank():
+    """DESIGN DECISION: an invalid tenant_type is quietly reset to neutral,
+    never rejected — the same "never punish unusual input" philosophy as
+    the rest of the engine."""
+    r = _client().post("/api/leads", json={
+        "first_name": "A", "last_name": "B", "email": "a@b.co", "tenant_type": "nonsense"})
+    assert r.status_code == 201
 
 
 def test_db_degrades_gracefully_without_database():

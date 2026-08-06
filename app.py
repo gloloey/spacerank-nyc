@@ -8,7 +8,8 @@ ENDPOINTS
   GET /api/landlords       ranked landlords (same params)
   GET /api/subway-stations typeahead search over real MTA station complexes
   GET /api/geocode         resolve a free-text address to lat/lng (NYC GeoSearch)
-  POST /api/leads          capture a tenant inquiry (log + Postgres if configured)
+  GET /api/geocode-suggest live multi-result address suggestions as-you-type
+  POST /api/leads          capture a tenant inquiry (log + Postgres + email if configured)
   GET /admin                small dashboard for the two endpoints below
   GET /api/admin/leads      [ADMIN_API_KEY] captured leads
   GET /api/admin/stats      [ADMIN_API_KEY] search/conversion analytics
@@ -40,6 +41,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
 import db
+import email_notify
 import price_model as _pm
 import semantic
 from landlord import rank_landlords
@@ -161,6 +163,39 @@ def geocode(q: str = Query(..., min_length=3, max_length=200)):
     return result
 
 
+_SUGGEST_CACHE: dict = {}
+
+
+@app.get("/api/geocode-suggest")
+def geocode_suggest(q: str = Query(..., min_length=3, max_length=200)):
+    """Live address suggestions as the tenant types — the /v2/autocomplete
+    NYC GeoSearch endpoint (built for exactly this, unlike /v2/search's
+    single best-guess match used by /api/geocode above). Each candidate
+    already carries lat/lng, so picking one needs no second round-trip.
+
+    HONEST LIMIT: NYC GeoSearch indexes streets/addresses only, not business
+    or venue names ("Starbucks") — confirmed empirically, not assumed. A
+    business-name query here honestly returns no results rather than a
+    guessed address; there's no free, keyless NYC data source that indexes
+    business names, so that's a real gap, not a bug."""
+    key = q.strip().lower()
+    if key in _SUGGEST_CACHE:
+        return _SUGGEST_CACHE[key]
+    results = []
+    try:
+        r = requests.get("https://geosearch.planninglabs.nyc/v2/autocomplete",
+                         params={"size": 5, "text": q}, timeout=8)
+        for feat in r.json().get("features", []):
+            lng, lat = feat["geometry"]["coordinates"]
+            if 40.4 < lat < 41.1 and -74.35 < lng < -73.55:   # NYC-metro only
+                results.append({"label": feat["properties"].get("label", q.strip()),
+                                "lat": lat, "lng": lng})
+    except Exception:
+        pass   # offline/upstream hiccup -> honestly empty, never a guess
+    _SUGGEST_CACHE[key] = {"results": results}
+    return _SUGGEST_CACHE[key]
+
+
 @app.get("/api/count")
 def count(property_type: str = Query("Office"),
           size_min: float | None = None, size_max: float | None = None,
@@ -238,15 +273,22 @@ def landlords(property_type: str = Query("Office"),
 # via db.insert_lead(). The log is never removed even with a DB present —
 # db.insert_lead() degrades to a no-op rather than raising, so a database
 # hiccup can never turn a tenant's form submission into a lost lead or a
-# 500. The UI also offers a prefilled email fallback on top of both.
+# 500. Two notification emails (admin + tenant confirmation) fire the same
+# way through email_notify.py — also a no-op without RESEND_API_KEY, never
+# a 500. There's no "email the landlord directly" step here on purpose —
+# not offered at launch.
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
+VALID_TENANT_TYPES = {"tenant", "broker", ""}
 
 
 class Lead(BaseModel):
-    name: str = Field(min_length=2, max_length=120)
+    first_name: str = Field(min_length=1, max_length=80)
+    last_name: str = Field(min_length=1, max_length=80)
     email: str = Field(max_length=254)
+    phone: str = Field(default="", max_length=32)
     company: str = Field(default="", max_length=160)
+    tenant_type: str = Field(default="", max_length=16)       # "tenant" | "broker" | ""
     message: str = Field(default="", max_length=2000)
     interested_in: str = Field(default="", max_length=300)   # building or landlord
     landlord: str = Field(default="", max_length=120)
@@ -260,7 +302,14 @@ class Lead(BaseModel):
             raise ValueError("not a valid email address")
         return v
 
-    @field_validator("name", "company", "message", "interested_in", "landlord")
+    @field_validator("tenant_type")
+    @classmethod
+    def _valid_tenant_type(cls, v: str) -> str:
+        v = v.strip().lower()
+        return v if v in VALID_TENANT_TYPES else ""
+
+    @field_validator("first_name", "last_name", "phone", "company", "message",
+                     "interested_in", "landlord")
     @classmethod
     def _strip(cls, v: str) -> str:
         return v.strip()
@@ -274,8 +323,8 @@ class Lead(BaseModel):
 
 @app.post("/api/leads", status_code=201)
 def create_lead(lead: Lead):
-    if not lead.name or not lead.email:
-        raise HTTPException(422, "name and email are required")
+    if not lead.first_name or not lead.last_name or not lead.email:
+        raise HTTPException(422, "first name, last name and email are required")
     record = {"kind": "SPACERANK_LEAD",
               "lead_id": uuid.uuid4().hex[:12],
               "received_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -283,9 +332,11 @@ def create_lead(lead: Lead):
     print(json.dumps(record, ensure_ascii=False), file=sys.stdout, flush=True)
     persisted = db.insert_lead(record)
     stored = "database + structured log" if persisted else "structured log (database not configured)"
+    admin_emailed = email_notify.send_admin_notification(record)
+    tenant_emailed = email_notify.send_tenant_confirmation(record)
     return {"ok": True, "lead_id": record["lead_id"],
             "message": "Request received — the leasing contact will hear from us.",
-            "stored": stored}
+            "stored": stored, "admin_notified": admin_emailed, "tenant_confirmed": tenant_emailed}
 
 
 # ---------------------------------------------------------------------------
