@@ -178,6 +178,15 @@ button:focus-visible, a:focus-visible {
 .persona .go { margin-left:auto; align-self:center; color:var(--blue); font-weight:700; opacity:0; transition:opacity .18s, transform .18s; transform:translateX(-4px); }
 .persona:hover .go { opacity:1; transform:none; }
 .hero .orline { font-size:.8rem; color:var(--ink-faint); margin:14px 2px 4px; }
+/* market pulse — anonymous, aggregate-only (see /api/pulse); stays hidden
+   entirely rather than showing a fabricated number when there's no DB or
+   simply not enough search volume yet to be meaningful. */
+.pulse { display:flex; align-items:center; flex-wrap:wrap; gap:8px 18px; margin:16px 2px 0;
+  padding:10px 16px; background:var(--card2); border:1px solid var(--line2); border-radius:999px;
+  font-size:.78rem; color:var(--ink-soft); }
+.pulse b { color:var(--ink); font-weight:700; }
+.pulse .sep { color:var(--line); }
+@media(max-width:640px){ .pulse { border-radius:var(--r-sm); } }
 /* ============================== LAYOUT ================================== */
 .layout { display:grid; grid-template-columns:340px 1fr; gap:26px; align-items:start; padding:26px 0 60px; }
 @media(max-width:920px){ .layout { grid-template-columns:1fr; } }
@@ -390,6 +399,14 @@ button:focus-visible, a:focus-visible {
 .baddr { display:flex; align-items:center; gap:6px; font-size:.78rem; color:var(--ink-soft); margin-top:3px; }
 .baddr .copybtn { padding:1px 5px; font-size:.66rem; }
 @media(min-width:1500px){ .thumbwrap { flex-basis:200px; } .thumb { width:200px; height:160px; } }
+/* the enlarged photo (168x136) is too wide for a narrow phone screen next
+   to a full binfo column in the same flex row — shrink back down rather
+   than force horizontal scrolling or crush the text column. */
+@media(max-width:520px){
+  .bmain { gap:12px; padding:40px 14px 12px; }
+  .thumbwrap { flex-basis:96px; } .thumb { width:96px; height:78px; }
+  .thumb.mono { font-size:1.1rem; }
+}
 .bmeta { display:flex; flex-wrap:wrap; gap:6px; margin:7px 0 9px; }
 .mchip { font-size:.7rem; color:var(--ink-soft); background:var(--card2); border:1px solid var(--line2); padding:2.5px 9px; border-radius:999px; }
 .mchip.ll { display:inline-flex; align-items:center; gap:5px; background:#0d1729; color:#fff; border-color:#0d1729; font-weight:600; }
@@ -465,6 +482,40 @@ button:focus-visible, a:focus-visible {
 .fav.on { background:var(--danger-soft); border-color:var(--danger); color:var(--danger); animation:pop2 .3s; }
 .fav:active { transform:scale(.92); }
 @keyframes pop2 { 50% { transform:scale(1.3); } }
+.abtn.cmp.on { background:var(--teal); border-color:var(--teal); color:#fff; }
+
+/* -------- comparison view -------- */
+.comparebar { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:950;
+  background:var(--ink); color:var(--bg); border-radius:999px; padding:8px 8px 8px 18px;
+  display:flex; align-items:center; gap:12px; box-shadow:var(--shadow-2); font-size:.82rem;
+  animation:rise .3s cubic-bezier(.2,.8,.25,1) both; }
+.comparebar button { border:none; border-radius:999px; padding:9px 17px; font:inherit; font-weight:700; cursor:pointer; }
+.comparebar #comparebtn { background:var(--blue-solid); color:#fff; }
+.comparebar #comparebtn:hover { filter:brightness(1.1); }
+.comparebar #comparecancel { background:transparent; color:var(--bg); opacity:.65; padding:9px 11px; font-weight:400; }
+.comparebar #comparecancel:hover { opacity:1; }
+.cmptable { width:100%; border-collapse:collapse; font-size:.82rem; margin-top:18px; }
+.cmptable th, .cmptable td { padding:9px 10px; border-bottom:1px solid var(--line2); text-align:left; vertical-align:top; }
+.cmptable th { color:var(--ink-faint); font-weight:600; font-size:.66rem; text-transform:uppercase; letter-spacing:.04em; width:100px; white-space:nowrap; }
+.cmphead { display:flex; align-items:center; gap:8px; }
+.cmphead img, .cmphead .mono3 { width:44px; height:36px; border-radius:7px; object-fit:cover; background:var(--bg2); flex:none; }
+.cmphead .mono3 { display:flex; align-items:center; justify-content:center; font-size:.66rem; font-weight:800; color:var(--ink-faint); }
+.cmpremove { border:none; background:none; color:var(--ink-faint); cursor:pointer; font-size:.72rem; margin-left:auto; flex:none; }
+.cmpremove:hover { color:var(--danger); }
+.cmpradar { display:flex; justify-content:center; flex-wrap:wrap; gap:20px; align-items:center; margin:6px 0 4px; }
+.cmplegend { display:flex; flex-direction:column; gap:7px; font-size:.78rem; }
+.cmplegend span { display:flex; align-items:center; gap:7px; }
+.cmplegend i { width:10px; height:10px; border-radius:3px; display:inline-block; flex:none; }
+.cmpnote { font-size:.7rem; color:var(--ink-faint); text-align:center; margin:0 0 4px; }
+/* the round back-to-top button and the comparison pill share the same
+   bottom-right/bottom-center corner — nudge back-to-top up whenever the
+   compare bar is showing so they never overlap. :has() is well-supported
+   across current browsers; this needs no JS coordination either way. */
+body:has(#comparebar:not([hidden])) .topbtn { bottom:76px; }
+@media(max-width:520px){
+  .comparebar { left:12px; right:12px; transform:none; padding:8px 8px 8px 14px; font-size:.76rem; }
+  .comparebar #comparebtn { padding:8px 13px; }
+}
 
 .schip { font-size:.68rem; font-weight:700; padding:1.5px 8px; border-radius:999px; font-variant-numeric:tabular-nums; }
 .estchip { font-size:.72rem; font-weight:600; color:var(--amber-ink); background:var(--amber-soft);
@@ -592,6 +643,15 @@ button:focus-visible, a:focus-visible {
 .favrow .fi span { font-size:.7rem; color:var(--ink-soft); }
 .favrow button { border:none; background:none; color:var(--danger); cursor:pointer; font-size:.85rem; }
 .drawer .dfoot { padding:12px 20px 18px; border-top:1px solid var(--line2); font-size:.72rem; color:var(--ink-faint); }
+.shortlistbox { display:flex; gap:6px; margin-top:10px; }
+.shortlistbox input { flex:1; font:inherit; font-size:.78rem; padding:7px 10px; border:1.5px solid var(--line);
+  border-radius:var(--r-sm); background:var(--card2); color:var(--ink); outline:none; }
+.shortlistbox input:focus { border-color:var(--blue); }
+.shortlistbox input.bad { border-color:var(--danger); }
+.shortlistbox button { border:none; background:var(--blue-solid); color:#fff; width:32px; border-radius:var(--r-sm);
+  cursor:pointer; font-size:.85rem; flex:none; }
+.shortlistbox button:hover { filter:brightness(1.08); }
+.shortlistbox button[disabled] { opacity:.6; cursor:wait; }
 
 /* ============================== MODAL (lead) ============================ */
 .modalback { position:fixed; inset:0; background:rgba(8,12,24,.55); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:1000; padding:18px; }
@@ -611,6 +671,12 @@ button:focus-visible, a:focus-visible {
 .phonerow select { flex:0 0 120px; }
 .phonerow input { flex:1; }
 .modal .seg { margin-top:2px; }
+@media(max-width:380px){
+  .modal .row2 { grid-template-columns:1fr; }
+  .phonerow { flex-wrap:wrap; }
+  .phonerow select { flex:1 1 100%; }
+  .phonerow input { flex:1 1 100%; }
+}
 .lpills { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px; }
 .lpill { font-size:.7rem; padding:3.5px 10px; border-radius:999px; background:var(--blue-soft); color:var(--blue-ink); font-weight:600; }
 .modalrow { display:flex; gap:10px; justify-content:flex-end; margin-top:19px; }
@@ -651,6 +717,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
     space in our dataset and the owners behind them, with every score explained. No brokers in between.</p>
   <div class="personas" id="personas"></div>
   <div class="orline">…or build your own search below — the button always shows how many spaces currently fit.</div>
+  <div class="pulse" id="pulse" hidden></div>
 </section>
 
 <main class="wrap layout pre-search" id="mainlayout">
@@ -734,6 +801,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
       <span class="cline" id="countline"></span>
       <span class="sp"></span>
       <button class="abtn" id="sharebtn" data-tt="Copy a link to this exact search — filters, areas and vibe included.">🔗 Share search</button>
+      <button class="abtn" id="alertbtn" data-tt="Get an email when a new listing matches this search.">🔔 Get alerts</button>
       <button class="abtn" id="drawbtn" hidden aria-pressed="false" data-tt="Click a point on the map, then pick a radius, to search a custom area instead of a named neighborhood.">📐 Draw area</button>
       <div class="viewtog" id="viewtog">
         <button data-v="list" class="on">☰ List</button>
@@ -778,7 +846,14 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
 <aside class="drawer" id="drawer" aria-label="Saved buildings">
   <h3>Saved buildings <button class="x" id="drawerx" aria-label="Close saved buildings panel">✕</button></h3>
   <div class="body" id="favlist"></div>
-  <div class="dfoot">Saved on this device only. Use "Request Intro" on a card to contact the owner.</div>
+  <div class="dfoot">
+    Saved on this device only. Use "Request Intro" on a card to contact the owner.
+    <div class="shortlistbox" id="shortlistbox" hidden>
+      <input id="shortlist_email" type="email" placeholder="you@company.com — email me this list" maxlength="254">
+      <button type="button" id="shortlistsend" aria-label="Email me this shortlist">✉</button>
+    </div>
+    <div class="fielderr" id="e_shortlist"></div>
+  </div>
 </aside>
 
 <div class="modalback" id="leadback" role="dialog" aria-modal="true" aria-labelledby="leadtitle">
@@ -830,6 +905,47 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
       <p id="leadoknote" style="font-size:.8rem;color:var(--ink-soft)"></p>
       <div class="modalrow" style="justify-content:center"><button type="button" onclick="closeLead()">Done</button></div>
     </div>
+  </div>
+</div>
+
+<div class="modalback" id="alertback" role="dialog" aria-modal="true" aria-labelledby="alerttitle">
+  <div class="modal">
+    <div id="alertform">
+      <h3 id="alerttitle">🔔 Get alerts for this search</h3>
+      <p class="sub2">We'll email you when a NEW listing matches — checked weekly, right after the dataset refreshes. One-click unsubscribe on every email.</p>
+      <div class="lpills" id="alertpills"></div>
+      <label for="alert_email">Email</label>
+      <input id="alert_email" maxlength="254" autocomplete="email" inputmode="email" placeholder="you@company.com">
+      <div class="fielderr" id="e_alert_email"></div>
+      <div class="modalerr" id="alerterr"></div>
+      <div class="modalrow">
+        <button type="button" class="ghost" onclick="closeAlertModal()">Cancel</button>
+        <button type="button" id="alertsend" onclick="sendAlertSignup()">Get alerts</button>
+      </div>
+    </div>
+    <div class="leadok" id="alertok" style="display:none">
+      <div class="big">✓</div>
+      <h3>You're set</h3>
+      <p>We'll email you at the address you gave when a new listing matches this search.</p>
+      <div class="modalrow" style="justify-content:center"><button type="button" onclick="closeAlertModal()">Done</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="comparebar" id="comparebar" hidden>
+  <span id="comparecount"></span>
+  <button type="button" id="comparecancel" aria-label="Clear comparison">Clear</button>
+  <button type="button" id="comparebtn">Compare →</button>
+</div>
+
+<div class="modalback" id="compareback" role="dialog" aria-modal="true" aria-labelledby="comparetitle">
+  <div class="modal" style="width:min(880px,96vw)">
+    <h3 id="comparetitle">Side-by-side comparison</h3>
+    <p class="sub2">Same 5 signals as every card, plotted on one chart so the shapes are easy to compare at a glance.</p>
+    <div class="cmpradar" id="cmpradar"></div>
+    <p class="cmpnote">Neutral (dashed to 50%) means that criterion wasn't part of your search — shown for shape comparison only, never a real 50% score.</p>
+    <div style="overflow-x:auto"><table class="cmptable" id="cmptable"></table></div>
+    <div class="modalrow"><button type="button" class="ghost" onclick="closeCompareModal()">Close</button></div>
   </div>
 </div>
 
@@ -1343,6 +1459,20 @@ fetch("/api/areas").then(r => r.json()).then(d => {
 }).catch(() => { $("backend").textContent = "Could not reach the server — refresh to retry."; })
   .finally(progressDone);
 
+/* ---------------- market pulse (best-effort, silent if unavailable) ---- */
+fetch("/api/pulse").then(r => r.ok ? r.json() : null).then(p => {
+  if (!p || !p.total_searches) return;   // no DB, or genuinely nothing yet — stay hidden
+  const bits = [`<span>🔥 <b>${p.total_searches.toLocaleString()}</b> searches in the last ${p.days} days</span>`];
+  if (p.top_areas && p.top_areas.length)
+    bits.push(`<span>Most searched: <b>${p.top_areas.map(k => esc(AREA_LOOKUP[k] || k)).join(", ")}</b></span>`);
+  if (p.top_property_type)
+    bits.push(`<span>Top type: <b>${esc(p.top_property_type)}</b></span>`);
+  if (p.avg_results_per_search != null)
+    bits.push(`<span>~<b>${Math.round(p.avg_results_per_search)}</b> spaces per search</span>`);
+  $("pulse").innerHTML = bits.join(`<span class="sep">·</span>`);
+  $("pulse").hidden = false;
+}).catch(() => {});
+
 renderTypes(); renderChips();
 $("q").addEventListener("input", syncChips);
 document.addEventListener("keydown", e => {
@@ -1419,6 +1549,7 @@ function renderFavs() {
       <button title="Remove" onclick='removeFav(${JSON.stringify(k)})'>✕</button>
     </div>`;
   }).join("") : `<div class="empty" style="padding:24px"><div class="big">♡</div>Nothing saved yet.<br>Tap the heart on any building card.</div>`;
+  $("shortlistbox").hidden = ks.length === 0;
 }
 $("favcnt").textContent = Object.keys(favs).length;
 $("favcnt").classList.toggle("zero", Object.keys(favs).length === 0);
@@ -1434,6 +1565,27 @@ function closeDrawer() {
   $("drawer").classList.remove("open"); $("drawerback").classList.remove("open");
   if (returnFocusEl) { returnFocusEl.focus(); returnFocusEl = null; }
 }
+$("shortlistsend").addEventListener("click", async () => {
+  const email = $("shortlist_email").value.trim();
+  const bad = !/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email);
+  $("shortlist_email").classList.toggle("bad", bad);
+  $("e_shortlist").textContent = bad ? "That doesn't look like a valid email." : "";
+  if (bad) return;
+  const buildings = Object.values(favs).map(f => ({
+    building: f.building, landlord: f.landlord, url: f.url || "", score: f.score ?? null }));
+  $("shortlistsend").disabled = true;
+  try {
+    const r = await fetch("/api/shortlist-email", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, buildings }),
+    });
+    if (!r.ok) throw new Error();
+    toast("Shortlist emailed to " + email);
+    $("shortlist_email").value = "";
+  } catch (e) {
+    toast("Couldn't send that — try again in a moment");
+  } finally { $("shortlistsend").disabled = false; }
+});
 
 /* ---------------- shareable search URLs -------------------------------- */
 /* The whole search lives in the URL: bookmark it, send it, hit back/forward.
@@ -1481,6 +1633,56 @@ $("sharebtn").addEventListener("click", () => {
     .then(() => toast("Search link copied — send it to anyone"))
     .catch(() => toast("Couldn't copy — the URL bar has the link"));
 });
+
+/* ---------------- saved search alerts ----------------------------------- */
+function currentSearchParams() {
+  // Same shape /api/match already takes (see params() above) — the
+  // backend reconstructs a TenantRequest from exactly this dict, both here
+  // (immediately, for the count) and later in tools/run_search_alerts.py
+  // (weekly, for the new-match diff), so there's only one param format to
+  // keep in sync anywhere in the codebase.
+  const obj = {};
+  for (const [k, v] of params(true).entries()) {
+    if (k === "area") { (obj.area ||= []).push(v); }
+    else obj[k] = v;
+  }
+  return obj;
+}
+$("alertbtn").addEventListener("click", () => {
+  $("alertpills").innerHTML = searchPills().map(p => `<span class="lpill">${esc(p)}</span>`).join("");
+  $("alertform").style.display = "block"; $("alertok").style.display = "none";
+  $("alerterr").style.display = "none";
+  $("alert_email").classList.remove("bad"); $("e_alert_email").textContent = "";
+  alertReturnFocusEl = document.activeElement;
+  $("alertback").classList.add("open");
+  $("alert_email").focus();
+});
+let alertReturnFocusEl = null;
+function closeAlertModal() {
+  $("alertback").classList.remove("open");
+  if (alertReturnFocusEl) { alertReturnFocusEl.focus(); alertReturnFocusEl = null; }
+}
+$("alertback").addEventListener("click", e => { if (e.target === $("alertback")) closeAlertModal(); });
+async function sendAlertSignup() {
+  const email = $("alert_email").value.trim();
+  const bad = !/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email);
+  $("alert_email").classList.toggle("bad", bad);
+  $("e_alert_email").textContent = bad ? "That doesn't look like a valid email." : "";
+  if (bad) return;
+  $("alertsend").disabled = true; $("alerterr").style.display = "none";
+  progressStart();
+  try {
+    const r = await fetch("/api/alerts", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, search: currentSearchParams() }),
+    });
+    if (!r.ok) throw new Error(`The server answered ${r.status}.`);
+    $("alertform").style.display = "none"; $("alertok").style.display = "block";
+  } catch (err) {
+    $("alerterr").textContent = "⚠ Couldn't set up alerts (" + (err.message || "network error") + ") — please try again.";
+    $("alerterr").style.display = "block";
+  } finally { $("alertsend").disabled = false; progressDone(); }
+}
 
 /* ---------------- search ----------------------------------------------- */
 async function getJSON(url, signal) {
@@ -1772,6 +1974,8 @@ function groupCard(g, i) {
     <div class="bact">
       <span class="who">${who}</span>
       ${mail ? `<button class="copybtn" data-tt="Copy email address" aria-label="Copy email address" onclick="copyEmail('${mail[1]}')">⧉</button>` : ""}
+      <button class="abtn cmp ${compareSet[k] ? "on" : ""}" data-comparekey="${esc(k)}"
+        data-tt="Add to a side-by-side comparison (up to 4)." onclick="toggleCompare(${i})">⚖ Compare</button>
       <a class="abtn" href="${top.url}" target="_blank" rel="noopener">View Listing ↗</a>
       <button class="abtn primary" onclick="openLead('g', ${i})">Request Intro</button>
     </div>
@@ -1786,6 +1990,135 @@ function renderMore() {
   $("showmore").textContent = `Show more results (${remaining} more building${remaining > 1 ? "s" : ""} ranked)`;
 }
 $("showmore").addEventListener("click", renderMore);
+
+/* ---------------- comparison view --------------------------------------
+   Client-side only (no backend needed — everything's already in the
+   ranked results held in `allGroups`). A hand-rolled SVG radar chart
+   overlays up to 4 buildings on the same 5 signal axes used everywhere
+   else on the site — no charting library, same "from scratch, explain
+   every line" spirit as the rest of the project. ------------------------- */
+const MAX_COMPARE = 4;
+const COMPARE_COLORS = ["#2456e6", "#0d9f8a", "#e08700", "#dd3d43"];
+let compareSet = {};   // favKey -> minimal snapshot needed for the table+chart
+
+function toggleCompare(i) {
+  const g = allGroups[i]; if (!g) return;
+  const k = favKey(g);
+  if (compareSet[k]) {
+    delete compareSet[k];
+  } else {
+    if (Object.keys(compareSet).length >= MAX_COMPARE) {
+      toast(`You can compare up to ${MAX_COMPARE} buildings — remove one first.`);
+      return;
+    }
+    const top = g.spaces[0];
+    const sizes = g.spaces.map(s => s.size_sqft).filter(v => v != null && v === v);
+    const rents = g.spaces.map(s => s.rent_psf).filter(v => v != null && v === v);
+    compareSet[k] = {
+      building: g.building, landlord: g.landlord, address: cleanAddress(top.address),
+      image: top.image || "", url: top.url || "", score: top.score, signals: top.signals,
+      fit_condition: top.fit_condition,
+      sizeRange: sizes.length ? [Math.min(...sizes), Math.max(...sizes)] : null,
+      rentRange: rents.length ? [Math.min(...rents), Math.max(...rents)] : null,
+    };
+  }
+  document.querySelectorAll(`[data-comparekey="${CSS.escape(k)}"]`).forEach(b => b.classList.toggle("on", !!compareSet[k]));
+  renderCompareBar();
+  if ($("compareback").classList.contains("open")) renderCompareModal();
+}
+function renderCompareBar() {
+  const n = Object.keys(compareSet).length;
+  $("comparebar").hidden = n < 2;
+  $("comparecount").textContent = `${n} building${n > 1 ? "s" : ""} selected`;
+}
+$("comparecancel").addEventListener("click", () => {
+  Object.keys(compareSet).forEach(k => delete compareSet[k]);
+  document.querySelectorAll(`[data-comparekey].on`).forEach(b => b.classList.remove("on"));
+  renderCompareBar();
+});
+let compareReturnFocusEl = null;
+$("comparebtn").addEventListener("click", () => {
+  renderCompareModal();
+  compareReturnFocusEl = document.activeElement;
+  $("compareback").classList.add("open");
+  $("compareback").querySelector(".ghost").focus();
+});
+function closeCompareModal() {
+  $("compareback").classList.remove("open");
+  if (compareReturnFocusEl) { compareReturnFocusEl.focus(); compareReturnFocusEl = null; }
+}
+$("compareback").addEventListener("click", e => { if (e.target === $("compareback")) closeCompareModal(); });
+
+/* Pentagon radar: 5 axes (type/size/budget/geo/vibe, same signal keys as
+   signalBars), one polygon per compared building. Angle/radius math is
+   plain trig — no SVG library needed. Colors go through style="" (not
+   bare attributes) because CSS var() resolution inside raw SVG
+   presentation attributes isn't reliable across browsers; inline style
+   is real CSS, so it always works. */
+function radarChartSvg(items) {
+  const axes = ["type", "size", "budget", "geo", "semantic"];
+  const labels = ["Type", "Size", "Budget", "Area", "Vibe"];
+  const N = axes.length, R = 78, CX = 110, CY = 96;
+  const angle = i => -Math.PI / 2 + i * (2 * Math.PI / N);
+  const pt = (i, v) => [CX + R * v * Math.cos(angle(i)), CY + R * v * Math.sin(angle(i))];
+  let svg = `<svg viewBox="0 0 220 210" width="260" height="248">`;
+  [0.25, 0.5, 0.75, 1].forEach(g => {
+    const pts = axes.map((_, i) => pt(i, g).join(",")).join(" ");
+    svg += `<polygon points="${pts}" fill="none" style="stroke:var(--line)" stroke-width="1"/>`;
+  });
+  axes.forEach((_, i) => {
+    const [x, y] = pt(i, 1);
+    svg += `<line x1="${CX}" y1="${CY}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" style="stroke:var(--line)" stroke-width="1"/>`;
+  });
+  labels.forEach((lbl, i) => {
+    const [x, y] = pt(i, 1.22);
+    svg += `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="10" style="fill:var(--ink-soft)" text-anchor="middle">${lbl}</text>`;
+  });
+  items.forEach((it, idx) => {
+    const col = COMPARE_COLORS[idx];
+    const pts = axes.map((ax, i) => pt(i, it.signals[ax] ?? 0.5).join(",")).join(" ");
+    svg += `<polygon points="${pts}" fill="${col}22" stroke="${col}" stroke-width="2.2"/>`;
+  });
+  svg += `</svg>`;
+  return svg;
+}
+function cmpRentLabel(r) {
+  if (!r) return "—";
+  const [lo, hi] = r.map(Math.round);
+  return lo === hi ? `$${lo}/SF` : `$${lo}–${hi}/SF`;
+}
+function cmpSizeLabel(r) {
+  if (!r) return "—";
+  return r[0] === r[1] ? `${fmt(r[0])} sf` : `${fmt(r[0])}–${fmt(r[1])} sf`;
+}
+function removeFromCompare(k) {
+  delete compareSet[k];
+  document.querySelectorAll(`[data-comparekey="${CSS.escape(k)}"]`).forEach(b => b.classList.remove("on"));
+  renderCompareBar();
+  if (Object.keys(compareSet).length < 2) { closeCompareModal(); return; }
+  renderCompareModal();
+}
+function renderCompareModal() {
+  const items = Object.entries(compareSet);
+  $("cmpradar").innerHTML = radarChartSvg(items.map(([, v]) => v)) +
+    `<div class="cmplegend">${items.map(([, v], idx) =>
+      `<span><i style="background:${COMPARE_COLORS[idx]}"></i>${esc(v.building)}</span>`).join("")}</div>`;
+  const rows = [
+    ["", items.map(([k, v]) => `<div class="cmphead">
+        ${v.image ? `<img src="${esc(v.image)}" alt="">` : `<div class="mono3">${monogram(v.building)}</div>`}
+        <b style="font-size:.86rem">${esc(v.building)}</b>
+        <button class="cmpremove" aria-label="Remove from comparison" onclick="removeFromCompare('${k.replace(/'/g, "\\'")}')">✕ remove</button>
+      </div>`)],
+    ["Score", items.map(([, v]) => `<b style="color:${scoreCol(v.score)}">${v.score}</b>`)],
+    ["Address", items.map(([, v]) => esc(v.address) || "—")],
+    ["Landlord", items.map(([, v]) => esc(v.landlord))],
+    ["Size", items.map(([, v]) => cmpSizeLabel(v.sizeRange))],
+    ["Rent", items.map(([, v]) => cmpRentLabel(v.rentRange))],
+    ["Condition", items.map(([, v]) => esc(FIT_LOOKUP[v.fit_condition] || v.fit_condition || "—"))],
+  ];
+  $("cmptable").innerHTML = rows.map(([label, cells]) =>
+    `<tr>${label ? `<th>${label}</th>` : "<th></th>"}${cells.map(c => `<td>${c}</td>`).join("")}</tr>`).join("");
+}
 
 /* ---------------- landlord cards --------------------------------------- */
 const LL_TT = {
@@ -2290,7 +2623,7 @@ function closeLead() {
   if (returnFocusEl) { returnFocusEl.focus(); returnFocusEl = null; }
 }
 $("leadback").addEventListener("click", e => { if (e.target === $("leadback")) closeLead(); });
-document.addEventListener("keydown", e => { if (e.key === "Escape") { closeLead(); closeDrawer(); } });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeLead(); closeDrawer(); closeAlertModal(); closeCompareModal(); } });
 function leadSearchEcho() {
   const o = { property_type: curType };
   if ($("smin").value) o.size_min = $("smin").value;

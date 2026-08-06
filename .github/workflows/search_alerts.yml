@@ -1,0 +1,51 @@
+# search_alerts.yml — SpaceRank NYC: weekly saved-search alert digest
+# =======================================================================
+# Runs tools/run_search_alerts.py whenever spaces_clean.csv changes (same
+# trigger as embeddings.yml) — diffs the fresh dataset against a persisted
+# "known listings" memory in Postgres, and emails anyone with a saved
+# search that has a genuinely NEW match this week. Never touches the repo
+# itself (no commit step) — purely a read-the-data, hit-the-DB, send-email
+# job, so a failure here can't affect the core refresh/deploy pipeline.
+#
+# ONE-TIME SETUP (needed before this does anything): add DATABASE_URL and
+# RESEND_API_KEY as repo secrets — Settings -> Secrets and variables ->
+# Actions -> New repository secret. Use the same values already set on
+# Vercel. Without them, this workflow runs and exits cleanly (db.py's
+# functions all no-op without DATABASE_URL) — it just won't send anything.
+
+name: search-alerts
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "spaces_clean.csv"
+      - "tools/run_search_alerts.py"
+      - "db.py"
+      - "email_notify.py"
+      - "matching.py"
+      - ".github/workflows/search_alerts.yml"
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # matching.py's own stack, minus the torch/onnx extras — semantic.py
+      # already degrades gracefully to its TF-IDF fallback without them.
+      - name: Install runtime deps
+        run: pip install pandas numpy "psycopg[binary]" requests
+
+      - name: Run the alert digest
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ADMIN_NOTIFY_EMAILS: ${{ secrets.ADMIN_NOTIFY_EMAILS }}
+        run: python tools/run_search_alerts.py

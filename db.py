@@ -64,6 +64,26 @@ CREATE TABLE IF NOT EXISTS search_events (
     landlord_style TEXT,
     result_count INTEGER
 );
+-- Saved search alerts: token IS the unsubscribe key (long random string,
+-- never guessable) as well as the primary key — no separate id needed.
+CREATE TABLE IF NOT EXISTS saved_searches (
+    token TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    params JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_notified_at TIMESTAMPTZ,
+    active BOOLEAN NOT NULL DEFAULT true
+);
+-- Every listing key ever seen, keyed by a stable identity (landlord +
+-- building + suite + source URL). tools/run_search_alerts.py inserts new
+-- keys each week (ON CONFLICT DO NOTHING) and treats whatever it just
+-- inserted as "new since last week" — this table IS that memory, since
+-- spaces_clean.csv itself is fully rebuilt from scratch every refresh and
+-- carries no history of its own.
+CREATE TABLE IF NOT EXISTS known_listings (
+    listing_key TEXT PRIMARY KEY,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 """
 
 _schema_ready = False
@@ -193,5 +213,144 @@ def fetch_stats() -> dict | None:
             "top_areas": top_areas,
             "top_landlords_by_interest": top_landlords,
         }
+    finally:
+        conn.close()
+
+
+def fetch_public_pulse(days: int = 30) -> dict | None:
+    """The PUBLIC, anonymous cousin of fetch_stats() — no lead/PII data,
+    only aggregate counts already stripped of anything personal in
+    search_events. None means "no database", same convention as fetch_stats,
+    so the caller can distinguish "not configured" from "genuinely zero"."""
+    conn = _connect()
+    if conn is None:
+        return None
+    try:
+        _ensure_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT COUNT(*) FROM search_events
+                   WHERE happened_at > now() - (%s || ' days')::interval""", (days,))
+            total = cur.fetchone()[0]
+            cur.execute(
+                """SELECT area, COUNT(*) AS n FROM search_events, unnest(areas) AS area
+                   WHERE happened_at > now() - (%s || ' days')::interval
+                   GROUP BY area ORDER BY n DESC LIMIT 3""", (days,))
+            top_areas = [r[0] for r in cur.fetchall()]
+            cur.execute(
+                """SELECT property_type, COUNT(*) AS n FROM search_events
+                   WHERE happened_at > now() - (%s || ' days')::interval
+                   GROUP BY property_type ORDER BY n DESC LIMIT 1""", (days,))
+            row = cur.fetchone()
+            top_type = row[0] if row else None
+            cur.execute(
+                """SELECT AVG(result_count) FROM search_events
+                   WHERE happened_at > now() - (%s || ' days')::interval""", (days,))
+            avg_results = cur.fetchone()[0]
+        return {
+            "days": days,
+            "total_searches": total,
+            "top_areas": top_areas,
+            "top_property_type": top_type,
+            "avg_results_per_search": round(float(avg_results), 1) if avg_results is not None else None,
+        }
+    finally:
+        conn.close()
+
+
+def insert_saved_search(token: str, email: str, params: dict) -> bool:
+    conn = _connect()
+    if conn is None:
+        return False
+    try:
+        _ensure_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO saved_searches (token, email, params)
+                   VALUES (%s, %s, %s)""", (token, email, Json(params)))
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def deactivate_saved_search(token: str) -> bool:
+    """Returns True iff a matching active row was actually found and
+    turned off — lets the unsubscribe endpoint give an honest response
+    rather than a blanket "done" for a bogus/already-used token."""
+    conn = _connect()
+    if conn is None:
+        return False
+    try:
+        _ensure_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE saved_searches SET active = false
+                   WHERE token = %s AND active = true""", (token,))
+            changed = cur.rowcount > 0
+        conn.commit()
+        return changed
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def fetch_active_saved_searches() -> list:
+    """Used only by tools/run_search_alerts.py (a standalone script, not a
+    web request) — no limit/pagination needed at this project's scale."""
+    conn = _connect()
+    if conn is None:
+        return []
+    try:
+        _ensure_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute("SELECT token, email, params FROM saved_searches WHERE active = true")
+            rows = cur.fetchall()
+        return [{"token": r[0], "email": r[1], "params": r[2]} for r in rows]
+    finally:
+        conn.close()
+
+
+def mark_search_notified(token: str) -> None:
+    conn = _connect()
+    if conn is None:
+        return
+    try:
+        _ensure_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute("UPDATE saved_searches SET last_notified_at = now() WHERE token = %s", (token,))
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+
+def mark_new_listing_keys(keys: list) -> list:
+    """Inserts every key not already known (ON CONFLICT DO NOTHING) and
+    returns exactly the ones that were actually new — i.e. weren't already
+    in the table before this call. That's the whole "what's new this week"
+    mechanism: a plain existence diff against a persisted memory, since the
+    freshly-rebuilt CSV itself has no concept of history."""
+    conn = _connect()
+    if conn is None:
+        return []
+    try:
+        _ensure_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute("SELECT listing_key FROM known_listings")
+            already_known = {r[0] for r in cur.fetchall()}
+            new_keys = [k for k in keys if k not in already_known]
+            if new_keys:
+                cur.executemany(
+                    "INSERT INTO known_listings (listing_key) VALUES (%s) ON CONFLICT DO NOTHING",
+                    [(k,) for k in new_keys])
+        conn.commit()
+        return new_keys
+    except Exception:
+        return []
     finally:
         conn.close()

@@ -128,3 +128,65 @@ def send_tenant_confirmation(lead: dict) -> bool:
       </p>
     </div>"""
     return _send([lead["email"]], f"Your request about {interested} — SpaceRank NYC", html)
+
+
+def _listing_row_html(m: dict) -> str:
+    size = f"{int(m['size_sqft']):,} sf" if m.get("size_sqft") else "size n/a"
+    rent = m.get("rent") or "rent on request"
+    return f"""<tr>
+      <td style="padding:8px 0;border-top:1px solid #eef1f8">
+        <b style="font-size:14px">{_esc(m.get('building'))}</b><br>
+        <span style="font-size:12px;color:#5a6478">{_esc(m.get('address') or '')}</span><br>
+        <span style="font-size:12px;color:#5a6478">{_esc(m.get('landlord'))} · {size} · {_esc(rent)}</span>
+      </td>
+      <td style="padding:8px 0;border-top:1px solid #eef1f8;text-align:right;vertical-align:top">
+        <a href="{_esc(m.get('url'))}" style="font-size:12px;color:#2456e6">View ↗</a>
+      </td>
+    </tr>"""
+
+
+def send_search_alert(email: str, matches: list, search_label: str, unsubscribe_url: str) -> bool:
+    """Weekly digest triggered by tools/run_search_alerts.py — never called
+    from a web request, so there's no tenant-facing failure mode to protect
+    here; still degrades to a silent no-op like everything else if
+    RESEND_API_KEY isn't set (the script just logs 0 emails sent)."""
+    if not matches:
+        return False
+    rows = "".join(_listing_row_html(m) for m in matches[:10])
+    more = f"<p style='font-size:12px;color:#868da0'>+{len(matches) - 10} more on the site.</p>" if len(matches) > 10 else ""
+    html = f"""
+    <div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:520px;margin:0 auto;color:#0b1324">
+      <h2 style="font-size:18px;margin:0 0 6px">New matches for your saved search</h2>
+      <p style="font-size:13px;color:#5a6478;margin:0 0 16px">{_esc(search_label)}</p>
+      <table style="width:100%;border-collapse:collapse">{rows}</table>
+      {more}
+      <p style="font-size:11px;color:#868da0;margin-top:24px">
+        You're getting this because you asked SpaceRank NYC to alert you about this search.
+        <a href="{_esc(unsubscribe_url)}" style="color:#868da0">Unsubscribe</a>
+      </p>
+    </div>"""
+    return _send([email], f"{len(matches)} new match{'es' if len(matches) != 1 else ''} for your SpaceRank NYC search", html)
+
+
+def send_shortlist_email(email: str, buildings: list) -> bool:
+    """buildings: bounded, client-supplied list from the favorites drawer —
+    already length/field-capped by app.py's validator before this is ever
+    called, so no further trust decisions are made here."""
+    if not buildings:
+        return False
+    rows = "".join(f"""<tr>
+      <td style="padding:8px 0;border-top:1px solid #eef1f8">
+        <b style="font-size:14px">{_esc(b.get('building'))}</b><br>
+        <span style="font-size:12px;color:#5a6478">{_esc(b.get('landlord'))}{f" · scored {b['score']}" if b.get('score') is not None else ''}</span>
+      </td>
+      <td style="padding:8px 0;border-top:1px solid #eef1f8;text-align:right;vertical-align:top">
+        {f'<a href="{_esc(b["url"])}" style="font-size:12px;color:#2456e6">View ↗</a>' if b.get('url') else ''}
+      </td>
+    </tr>""" for b in buildings)
+    html = f"""
+    <div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:520px;margin:0 auto;color:#0b1324">
+      <h2 style="font-size:18px;margin:0 0 14px">Your SpaceRank NYC shortlist</h2>
+      <table style="width:100%;border-collapse:collapse">{rows}</table>
+      <p style="font-size:11px;color:#868da0;margin-top:24px">Saved from spaceranknyc.com — this list lives on your device, so this email is the only backup copy.</p>
+    </div>"""
+    return _send([email], f"Your shortlist — {len(buildings)} building{'s' if len(buildings) != 1 else ''} — SpaceRank NYC", html)

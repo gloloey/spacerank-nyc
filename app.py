@@ -13,6 +13,10 @@ ENDPOINTS
   GET /admin                small dashboard for the two endpoints below
   GET /api/admin/leads      [ADMIN_API_KEY] captured leads
   GET /api/admin/stats      [ADMIN_API_KEY] search/conversion analytics
+  GET /api/pulse            public anonymous market-pulse stats (homepage strip)
+  POST /api/alerts          save a search for weekly new-match email alerts
+  GET /api/alerts/unsubscribe  one-click unsubscribe link (from the alert email)
+  POST /api/shortlist-email email the favorites-drawer shortlist to yourself
 
 Multi-value params: repeat ?area=...&area=... for several submarkets.
 `term` ("short"/"long") is accepted and ECHOED but never scored — it exists
@@ -37,7 +41,7 @@ from datetime import datetime, timezone
 
 import requests
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field, field_validator
 
 import db
@@ -379,3 +383,107 @@ def admin_stats(_admin: None = Depends(_require_admin)):
     if stats is None:
         raise HTTPException(503, "database not configured")
     return stats
+
+
+# ---------------------------------------------------------------------------
+# Public market pulse — GET /api/pulse
+# ---------------------------------------------------------------------------
+# The anonymous, aggregate-only cousin of /api/admin/stats — no auth needed
+# because search_events never stores anything identifying (see db.py). Used
+# by the homepage "market pulse" strip.
+
+@app.get("/api/pulse")
+def pulse():
+    p = db.fetch_public_pulse()
+    if p is None:
+        raise HTTPException(503, "database not configured")
+    return p
+
+
+# ---------------------------------------------------------------------------
+# Saved search alerts — POST /api/alerts, GET /api/alerts/unsubscribe
+# ---------------------------------------------------------------------------
+# A saved search is just an email + the same param shape /api/match already
+# takes (see index.html's params()) — tools/run_search_alerts.py (run from
+# a GitHub Actions workflow after each weekly data refresh) reconstructs a
+# TenantRequest from it and checks for NEW matches since last week. This
+# endpoint only ever stores the request; it never sends mail itself.
+
+class SavedSearchIn(BaseModel):
+    email: str = Field(max_length=254)
+    search: dict = Field(default_factory=dict)
+
+    @field_validator("email")
+    @classmethod
+    def _valid_email(cls, v: str) -> str:
+        v = v.strip()
+        if not _EMAIL_RE.match(v):
+            raise ValueError("not a valid email address")
+        return v
+
+    @field_validator("search")
+    @classmethod
+    def _small_search(cls, v: dict) -> dict:
+        return {str(k)[:40]: (v[k] if isinstance(v[k], list) else str(v[k])[:200])
+               for k in list(v)[:16]}
+
+
+@app.post("/api/alerts", status_code=201)
+def create_alert(body: SavedSearchIn):
+    token = uuid.uuid4().hex
+    persisted = db.insert_saved_search(token, body.email, body.search)
+    if not persisted:
+        raise HTTPException(503, "alerts need a database — not configured on this deployment yet")
+    return {"ok": True, "message": "You'll get an email when new listings match this search."}
+
+
+@app.get("/api/alerts/unsubscribe", response_class=HTMLResponse)
+def unsubscribe_alert(token: str = Query(..., min_length=10, max_length=64)):
+    found = db.deactivate_saved_search(token)
+    msg = ("You've been unsubscribed — no more alerts for this search."
+           if found else "That link has already been used or isn't valid.")
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+    <title>SpaceRank NYC</title>
+    <style>body{{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#f3f5fa;
+      display:flex;align-items:center;justify-content:center;height:100vh;margin:0}}
+      div{{background:#fff;padding:32px 36px;border-radius:16px;box-shadow:0 4px 16px rgba(11,19,36,.08);
+      text-align:center;max-width:360px}}</style></head>
+    <body><div><h2 style="margin:0 0 8px">SpaceRank NYC</h2><p style="color:#5a6478">{msg}</p></div></body></html>"""
+
+
+# ---------------------------------------------------------------------------
+# Shortlist email — POST /api/shortlist-email
+# ---------------------------------------------------------------------------
+# The favorites drawer is client-side/localStorage only (by design — no
+# account system), so the list of buildings has to come FROM the client.
+# Bounded the same way Lead.search is: a hostile client can't turn this
+# into a way to email arbitrary large payloads through us.
+
+class ShortlistItem(BaseModel):
+    building: str = Field(max_length=160)
+    landlord: str = Field(default="", max_length=120)
+    url: str = Field(default="", max_length=500)
+    score: float | None = None
+
+
+class ShortlistIn(BaseModel):
+    email: str = Field(max_length=254)
+    buildings: list[ShortlistItem] = Field(max_length=30)
+
+    @field_validator("email")
+    @classmethod
+    def _valid_email(cls, v: str) -> str:
+        v = v.strip()
+        if not _EMAIL_RE.match(v):
+            raise ValueError("not a valid email address")
+        return v
+
+
+@app.post("/api/shortlist-email")
+def shortlist_email(body: ShortlistIn):
+    if not body.buildings:
+        raise HTTPException(422, "no buildings to send")
+    sent = email_notify.send_shortlist_email(body.email, [b.model_dump() for b in body.buildings])
+    if not sent:
+        raise HTTPException(503, "email isn't configured on this deployment yet")
+    return {"ok": True}

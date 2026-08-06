@@ -412,6 +412,40 @@ def test_lead_tenant_type_bad_value_becomes_blank():
     assert r.status_code == 201
 
 
+def test_pulse_endpoint_honest_without_database():
+    """No DB in the test env -> 503, never a fabricated zero-state."""
+    r = _client().get("/api/pulse")
+    assert r.status_code == 503
+
+
+def test_alerts_rejects_bad_email_and_is_honest_without_database():
+    c = _client()
+    assert c.post("/api/alerts", json={"email": "nope", "search": {}}).status_code == 422
+    # valid payload, but no DB configured in the test env -> honest 503,
+    # not a fake "ok" that quietly loses the signup
+    r = c.post("/api/alerts", json={"email": "a@b.co", "search": {"property_type": "Office"}})
+    assert r.status_code == 503
+
+
+def test_alerts_unsubscribe_reports_honestly_for_bogus_token():
+    r = _client().get("/api/alerts/unsubscribe", params={"token": "not-a-real-token-at-all"})
+    assert r.status_code == 200
+    assert "already been used" in r.text or "isn't valid" in r.text
+
+
+def test_shortlist_email_bounds_and_validates():
+    c = _client()
+    assert c.post("/api/shortlist-email", json={"email": "nope", "buildings": []}).status_code == 422
+    assert c.post("/api/shortlist-email", json={"email": "a@b.co", "buildings": []}).status_code == 422
+    # 31 buildings exceeds the 30-item cap -> rejected before ever trying to send
+    many = [{"building": f"B{i}", "landlord": "L", "url": "", "score": 80} for i in range(31)]
+    assert c.post("/api/shortlist-email", json={"email": "a@b.co", "buildings": many}).status_code == 422
+    # valid, bounded payload -> honest 503 without RESEND_API_KEY in the test env
+    ok = [{"building": "171 Madison Avenue", "landlord": "GFP Real Estate", "url": "https://x", "score": 88}]
+    r = c.post("/api/shortlist-email", json={"email": "a@b.co", "buildings": ok})
+    assert r.status_code == 503
+
+
 def test_db_degrades_gracefully_without_database():
     """No DATABASE_URL configured (the CI/default state) -> every db.py
     function no-ops safely instead of raising."""
@@ -419,11 +453,16 @@ def test_db_degrades_gracefully_without_database():
     saved = db.DATABASE_URL
     db.DATABASE_URL = None
     try:
-        assert db.insert_lead({"lead_id": "x", "received_at": "now", "name": "a",
-                               "email": "a@b.co", "company": "", "message": "",
-                               "interested_in": "", "landlord": "", "search": {}}) is False
+        assert db.insert_lead({"lead_id": "x", "received_at": "now", "first_name": "a", "last_name": "b",
+                               "email": "a@b.co", "phone": "", "company": "", "tenant_type": "",
+                               "message": "", "interested_in": "", "landlord": "", "search": {}}) is False
         assert db.fetch_leads() == []
         assert db.fetch_stats() is None
+        assert db.fetch_public_pulse() is None
+        assert db.insert_saved_search("tok", "a@b.co", {}) is False
+        assert db.deactivate_saved_search("tok") is False
+        assert db.fetch_active_saved_searches() == []
+        assert db.mark_new_listing_keys(["a", "b"]) == []
     finally:
         db.DATABASE_URL = saved
 
