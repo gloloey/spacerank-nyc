@@ -2061,7 +2061,12 @@ function radarChartSvg(items) {
   const N = axes.length, R = 78, CX = 110, CY = 96;
   const angle = i => -Math.PI / 2 + i * (2 * Math.PI / N);
   const pt = (i, v) => [CX + R * v * Math.cos(angle(i)), CY + R * v * Math.sin(angle(i))];
-  let svg = `<svg viewBox="0 0 220 210" width="260" height="248">`;
+  // The top label ("Type") sits at y = CY - R*1.22 ≈ 0.8 — right at the
+  // viewBox's top edge, so its glyph ascenders were getting clipped (SVG
+  // clips anything outside the viewBox by default). Extending the viewBox
+  // upward by 16 with a negative y-offset gives it headroom without
+  // touching any of the trig/layout math above.
+  let svg = `<svg viewBox="0 -16 220 226" width="260" height="267">`;
   [0.25, 0.5, 0.75, 1].forEach(g => {
     const pts = axes.map((_, i) => pt(i, g).join(",")).join(" ");
     svg += `<polygon points="${pts}" fill="none" style="stroke:var(--line)" stroke-width="1"/>`;
