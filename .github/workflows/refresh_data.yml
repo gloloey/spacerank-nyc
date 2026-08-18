@@ -1,6 +1,6 @@
 # refresh_data.yml — SpaceRank NYC: the self-updating dataset
 # ============================================================
-# Every Monday 09:00 UTC (and on demand via "Run workflow"):
+# On demand via "Run workflow" (see note below on why the schedule is off):
 #   1. re-run every scraper (scrape_*.py) on this runner — full internet
 #      access here; the polite rate limits in each scraper still apply
 #   2. rebuild spaces_clean.csv + dataset_meta.json with clean_dataset.py
@@ -15,12 +15,19 @@
 #   5. commit the fresh CSVs — then explicitly dispatch embeddings.yml
 #      (GITHUB_TOKEN pushes don't fire on-push workflows) — which triggers
 #      the normal Vercel deploy.
+#
+# SCHEDULE INTENTIONALLY DISABLED (2026-08-09): the live site's Vercel
+# project (and its database) now lives under a different GitHub repo
+# (the deployment target moved). Running this on a weekly cron here too
+# would re-scrape every landlord site twice for no benefit and silently
+# drift this repo's data out of sync with the live one every single week.
+# This repo still gets fresh data — just copied over from the live repo's
+# own runs rather than scraped independently. Manual "Run workflow" still
+# works if this copy ever needs to run for real on its own.
 
 name: refresh-data
 
 on:
-  schedule:
-    - cron: "0 9 * * 1"     # Mondays 09:00 UTC
   workflow_dispatch: {}
 
 permissions:
