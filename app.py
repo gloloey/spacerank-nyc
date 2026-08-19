@@ -278,7 +278,7 @@ def landlords(property_type: str = Query("Office"),
 # db.insert_lead() degrades to a no-op rather than raising, so a database
 # hiccup can never turn a tenant's form submission into a lost lead or a
 # 500. Two notification emails (admin + tenant confirmation) fire the same
-# way through email_notify.py — also a no-op without RESEND_API_KEY, never
+# way through email_notify.py — also a no-op without SENDGRID_API_KEY, never
 # a 500. There's no "email the landlord directly" step here on purpose —
 # not offered at launch.
 

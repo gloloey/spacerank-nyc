@@ -19,7 +19,7 @@ commits a fresh spaces_clean.csv. Does three things:
 Safe to run with nothing configured: db.py's functions all degrade to
 empty/no-op without DATABASE_URL, so this exits quietly (0 new listings,
 0 searches) rather than failing the whole workflow. Needs DATABASE_URL and
-RESEND_API_KEY as GitHub Actions repo secrets to actually do anything —
+SENDGRID_API_KEY as GitHub Actions repo secrets to actually do anything —
 see .github/workflows/search_alerts.yml's comment for the one-time setup.
 """
 
@@ -110,7 +110,7 @@ def main():
             sent += 1
             print(f"  -> {s['email']}: {len(fresh)} new match(es)")
         else:
-            print(f"  -> {s['email']}: {len(fresh)} new match(es), EMAIL FAILED (or RESEND_API_KEY unset)")
+            print(f"  -> {s['email']}: {len(fresh)} new match(es), EMAIL FAILED (or SENDGRID_API_KEY unset)")
     print(f"Alerts sent: {sent}/{len(searches)} searches had new matches.")
 
 

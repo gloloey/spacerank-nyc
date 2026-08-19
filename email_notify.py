@@ -3,27 +3,33 @@ email_notify.py — SpaceRank NYC: lead notification emails
 ===========================================================
 Two emails per lead: one to the SpaceRank team (full details, so a real
 inquiry is never missed), one confirming receipt to the tenant/broker who
-submitted it. Sent via Resend's plain REST API (https://resend.com) using
-`requests` — already a runtime dependency, so no new package is needed for
-something this small.
+submitted it. Sent via SendGrid's plain REST API (https://sendgrid.com)
+using `requests` — already a runtime dependency, so no new package is
+needed for something this small.
 
 HONEST-PERSISTENCE PATTERN (same as db.py): every function here degrades to
-a silent no-op if RESEND_API_KEY isn't set, or if the Resend API call fails
-for any reason. A dead email provider must never turn a tenant's form
+a silent no-op if SENDGRID_API_KEY isn't set, or if the SendGrid API call
+fails for any reason. A dead email provider must never turn a tenant's form
 submission into a 500 — the stdout log + Postgres write in app.py already
 guarantee the lead itself is never lost; email is a notification on top,
 not the source of truth.
 
 SETUP (one-time, needs Gabriel's own account — same pattern as DATABASE_URL
-and the admin key): sign up free at resend.com, verify sending from either
-your own domain (spaceranknyc.com) or skip that and use their built-in
-onboarding@resend.dev sender for testing, then set RESEND_API_KEY as an
-env var (Vercel + local .env.local). Nothing else in this file needs to
-change — ADMIN_NOTIFY_EMAILS is separately configurable without touching
-code, exactly so more recipients can be added easily.
+and the admin key): sign up free at sendgrid.com, verify a sender identity
+(Settings -> Sender Authentication — either a quick "Single Sender
+Verification" for one address, or full domain authentication for
+spaceranknyc.com via DNS), create an API key (Settings -> API Keys, "Mail
+Send" permission is enough), then set SENDGRID_API_KEY as an env var
+(Vercel + local .env.local). Unlike some providers, SendGrid has no
+zero-setup shared sender — SENDGRID_FROM must be an address that's
+actually verified in the dashboard, or every send will fail (silently, per
+the pattern above). Nothing else in this file needs to change —
+ADMIN_NOTIFY_EMAILS is separately configurable without touching code,
+exactly so more recipients can be added easily.
 """
 
 import os
+import re
 
 try:
     from dotenv import load_dotenv
@@ -33,11 +39,15 @@ except ImportError:
 
 import requests
 
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
-# Resend's shared testing sender works immediately with zero DNS setup;
-# swap to a verified spaceranknyc.com address once that domain's sending
-# records are set up in the Resend dashboard.
-RESEND_FROM = os.environ.get("RESEND_FROM", "SpaceRank NYC <onboarding@resend.dev>")
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
+# Must be a sender verified in SendGrid (Single Sender Verification, or a
+# fully authenticated domain) — SendGrid rejects sends from anything else.
+# spaceranknyc.com addresses didn't reliably receive SendGrid's own
+# verification email (delivery/filtering issue, not a real-mailbox
+# problem — info@ receives fine from other senders), so gabriel's existing
+# plus972group.com address is verified instead for now; swap this once a
+# spaceranknyc.com address is verified too.
+SENDGRID_FROM = os.environ.get("SENDGRID_FROM", "SpaceRank NYC <gabriel@plus972group.com>")
 # Not a secret — a recipient list, not a credential — so a sane default
 # ships in code (rule: credentials need an env var, plain config doesn't).
 # Add more addresses any time via the env var, no code change needed.
@@ -46,17 +56,32 @@ ADMIN_NOTIFY_EMAILS = [
     if e.strip()
 ]
 
-_API_URL = "https://api.resend.com/emails"
+_API_URL = "https://api.sendgrid.com/v3/mail/send"
+_FROM_RE = re.compile(r"^\s*(.*?)\s*<([^<>]+)>\s*$")
+
+
+def _parse_from(raw: str) -> dict:
+    """'Name <email>' -> {"email": ..., "name": ...}; a bare email works too."""
+    m = _FROM_RE.match(raw or "")
+    if m:
+        name, email = m.groups()
+        return {"email": email, "name": name} if name else {"email": email}
+    return {"email": raw}
 
 
 def _send(to: list, subject: str, html: str) -> bool:
-    if not RESEND_API_KEY:
+    if not SENDGRID_API_KEY:
         return False
     try:
         r = requests.post(_API_URL,
-                          headers={"Authorization": f"Bearer {RESEND_API_KEY}",
+                          headers={"Authorization": f"Bearer {SENDGRID_API_KEY}",
                                    "Content-Type": "application/json"},
-                          json={"from": RESEND_FROM, "to": to, "subject": subject, "html": html},
+                          json={
+                              "personalizations": [{"to": [{"email": e} for e in to]}],
+                              "from": _parse_from(SENDGRID_FROM),
+                              "subject": subject,
+                              "content": [{"type": "text/html", "value": html}],
+                          },
                           timeout=8)
         return r.status_code < 300
     except Exception:
@@ -149,7 +174,7 @@ def send_search_alert(email: str, matches: list, search_label: str, unsubscribe_
     """Weekly digest triggered by tools/run_search_alerts.py — never called
     from a web request, so there's no tenant-facing failure mode to protect
     here; still degrades to a silent no-op like everything else if
-    RESEND_API_KEY isn't set (the script just logs 0 emails sent)."""
+    SENDGRID_API_KEY isn't set (the script just logs 0 emails sent)."""
     if not matches:
         return False
     rows = "".join(_listing_row_html(m) for m in matches[:10])

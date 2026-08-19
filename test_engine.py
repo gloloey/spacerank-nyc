@@ -440,7 +440,7 @@ def test_shortlist_email_bounds_and_validates():
     # 31 buildings exceeds the 30-item cap -> rejected before ever trying to send
     many = [{"building": f"B{i}", "landlord": "L", "url": "", "score": 80} for i in range(31)]
     assert c.post("/api/shortlist-email", json={"email": "a@b.co", "buildings": many}).status_code == 422
-    # valid, bounded payload -> honest 503 without RESEND_API_KEY in the test env
+    # valid, bounded payload -> honest 503 without SENDGRID_API_KEY in the test env
     ok = [{"building": "171 Madison Avenue", "landlord": "GFP Real Estate", "url": "https://x", "score": 88}]
     r = c.post("/api/shortlist-email", json={"email": "a@b.co", "buildings": ok})
     assert r.status_code == 503

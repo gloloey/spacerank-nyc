@@ -8,7 +8,7 @@
 # job, so a failure here can't affect the core refresh/deploy pipeline.
 #
 # ONE-TIME SETUP (needed before this does anything): add DATABASE_URL and
-# RESEND_API_KEY as repo secrets — Settings -> Secrets and variables ->
+# SENDGRID_API_KEY as repo secrets — Settings -> Secrets and variables ->
 # Actions -> New repository secret. Use the same values already set on
 # Vercel. Without them, this workflow runs and exits cleanly (db.py's
 # functions all no-op without DATABASE_URL) — it just won't send anything.
@@ -46,6 +46,6 @@ jobs:
       - name: Run the alert digest
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
           ADMIN_NOTIFY_EMAILS: ${{ secrets.ADMIN_NOTIFY_EMAILS }}
         run: python tools/run_search_alerts.py
