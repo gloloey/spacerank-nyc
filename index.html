@@ -389,28 +389,38 @@ button:focus-visible, a:focus-visible {
    heart badge and the score ring (also top-right) can never overlap
    regardless of how the ring's own flex alignment resolves. */
 .bmain { display:flex; gap:20px; padding:44px 22px 14px; position:relative; }
-.thumbwrap { position:relative; flex:0 0 168px; }
+.thumbwrap { position:relative; flex:0 0 240px; }
 /* .thumbclip (not .thumbwrap) owns overflow:hidden for the hover-zoom below
    — .thumbwrap can't clip, since .rankn is an absolutely-positioned child
    deliberately poking outside its top-left corner. */
 .thumbclip { border-radius:12px; overflow:hidden; }
-.thumb { width:168px; height:136px; border-radius:12px; object-fit:cover; display:block; background:var(--bg2); transition:opacity .4s ease, transform .4s cubic-bezier(.2,.8,.2,1); }
+/* Photo is now the dominant element on the card — with the signal bars
+   and extra suite rows collapsed behind the "why" toggle (see .matchdetails
+   above), the text column next to it is short, so a small thumbnail used
+   to leave the photo looking stranded next to empty space. Sized to
+   roughly match the taller of (photo, text column) at each breakpoint. */
+.thumb { width:240px; height:192px; border-radius:12px; object-fit:cover; display:block; background:var(--bg2); transition:opacity .4s ease, transform .4s cubic-bezier(.2,.8,.2,1); }
 .bcard:hover .thumb:not(.mono) { transform:scale(1.06); }
-.thumb.mono { display:flex; align-items:center; justify-content:center; font-family:var(--disp); font-weight:800; font-size:1.6rem; color:var(--ink-faint); }
+.thumb.mono { display:flex; align-items:center; justify-content:center; font-family:var(--disp); font-weight:800; font-size:2rem; color:var(--ink-faint); }
 .rankn { position:absolute; top:-7px; left:-7px; background:var(--ink); color:var(--bg); font-size:.68rem; font-weight:800; width:22px; height:22px; border-radius:8px; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-1); }
 .binfo { flex:1; min-width:0; }
 .brow1 { display:flex; align-items:flex-start; gap:10px; padding-right:34px; }
 .bname { font-family:var(--disp); font-weight:700; font-size:1.14rem; letter-spacing:-.01em; line-height:1.25; }
 .baddr { display:flex; align-items:center; gap:6px; font-size:.78rem; color:var(--ink-soft); margin-top:3px; }
 .baddr .copybtn { padding:1px 5px; font-size:.66rem; }
-@media(min-width:1500px){ .thumbwrap { flex-basis:200px; } .thumb { width:200px; height:160px; } }
-/* the enlarged photo (168x136) is too wide for a narrow phone screen next
-   to a full binfo column in the same flex row — shrink back down rather
-   than force horizontal scrolling or crush the text column. */
+@media(min-width:1500px){ .thumbwrap { flex-basis:280px; } .thumb { width:280px; height:224px; } }
+/* a middle step so the 240px desktop photo doesn't crowd out the text
+   column on tablet-ish widths, before the mobile breakpoint below takes
+   over entirely. */
+@media(max-width:760px){ .thumbwrap { flex-basis:180px; } .thumb { width:180px; height:144px; } }
+/* the enlarged photo is too wide for a narrow phone screen next to a full
+   binfo column in the same flex row — shrink back down rather than force
+   horizontal scrolling or crush the text column. Still noticeably bigger
+   than the pre-redesign mobile size, in the same spirit as desktop. */
 @media(max-width:520px){
   .bmain { gap:12px; padding:40px 14px 12px; }
-  .thumbwrap { flex-basis:96px; } .thumb { width:96px; height:78px; }
-  .thumb.mono { font-size:1.1rem; }
+  .thumbwrap { flex-basis:128px; } .thumb { width:128px; height:104px; }
+  .thumb.mono { font-size:1.3rem; }
 }
 .bmeta { display:flex; flex-wrap:wrap; gap:6px; margin:7px 0 9px; }
 .mchip { font-size:.7rem; color:var(--ink-soft); background:var(--card2); border:1px solid var(--line2); padding:2.5px 9px; border-radius:999px; }
