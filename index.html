@@ -390,7 +390,12 @@ button:focus-visible, a:focus-visible {
    regardless of how the ring's own flex alignment resolves. */
 .bmain { display:flex; gap:20px; padding:44px 22px 14px; position:relative; }
 .thumbwrap { position:relative; flex:0 0 168px; }
-.thumb { width:168px; height:136px; border-radius:12px; object-fit:cover; display:block; background:var(--bg2); transition:opacity .4s ease; }
+/* .thumbclip (not .thumbwrap) owns overflow:hidden for the hover-zoom below
+   — .thumbwrap can't clip, since .rankn is an absolutely-positioned child
+   deliberately poking outside its top-left corner. */
+.thumbclip { border-radius:12px; overflow:hidden; }
+.thumb { width:168px; height:136px; border-radius:12px; object-fit:cover; display:block; background:var(--bg2); transition:opacity .4s ease, transform .4s cubic-bezier(.2,.8,.2,1); }
+.bcard:hover .thumb:not(.mono) { transform:scale(1.06); }
 .thumb.mono { display:flex; align-items:center; justify-content:center; font-family:var(--disp); font-weight:800; font-size:1.6rem; color:var(--ink-faint); }
 .rankn { position:absolute; top:-7px; left:-7px; background:var(--ink); color:var(--bg); font-size:.68rem; font-weight:800; width:22px; height:22px; border-radius:8px; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-1); }
 .binfo { flex:1; min-width:0; }
@@ -464,9 +469,38 @@ button:focus-visible, a:focus-visible {
 .suiterow { display:flex; justify-content:space-between; gap:10px; font-size:.8rem; padding:5px 0; }
 .suiterow .sname { font-weight:600; }
 .suiterow .sinfo { color:var(--ink-soft); font-variant-numeric:tabular-nums; white-space:nowrap; }
-.moresuites summary { font-size:.75rem; color:var(--blue); cursor:pointer; padding:4px 0; font-weight:600; }
+.moresuites summary { display:flex; align-items:center; gap:6px; font-size:.75rem; color:var(--blue); cursor:pointer; padding:4px 0; font-weight:600; list-style:none; }
+.moresuites summary::-webkit-details-marker { display:none; }
 .why { font-size:.78rem; color:var(--ink-soft); padding:9px 18px; border-top:1px solid var(--line2); background:var(--card2); line-height:1.5; }
 .why b { color:var(--ink); }
+
+/* -------- progressive disclosure: the 5-signal breakdown and the "why"
+   reasoning are real, honest data — just not something a first-time
+   visitor needs staring at them on every one of 20 cards. Collapsed by
+   default behind one plain-language toggle; a click reveals the exact
+   same numbers that used to be always-on. Shared by building cards and
+   landlord cards — the .llcard-scoped rules below just strip the
+   horizontal padding, since .llcard already pads its own edges. -------- */
+.matchdetails { border-top:1px solid var(--line2); }
+.matchdetails summary {
+  list-style:none; cursor:pointer; padding:10px 18px; font-size:.79rem; font-weight:700;
+  color:var(--blue); display:flex; align-items:center; gap:6px; user-select:none;
+}
+.matchdetails summary::-webkit-details-marker { display:none; }
+.matchdetails summary:hover { color:var(--blue-ink); }
+.matchdetails .matchbody { padding:2px 18px 16px; }
+.matchdetails .bars { max-width:none; margin-bottom:10px; }
+.matchdetails .why { padding:0; border:none; background:none; }
+.llcard .matchdetails summary, .llcard .matchdetails .matchbody { padding-left:0; padding-right:0; }
+.llcard .matchdetails { margin-top:2px; }
+.chev { display:inline-block; font-size:.62rem; transition:transform .2s ease; }
+details[open] > summary .chev { transform:rotate(180deg); }
+/* every <details> reveals its content with the same soft fade+drop rather
+   than an instant pop — one shared rule instead of repeating the
+   animation per class, since each wraps its revealed content in exactly
+   one element right after <summary>. */
+details[open] > summary + * { animation:detailsIn .22s cubic-bezier(.2,.8,.25,1) both; }
+@keyframes detailsIn { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:none; } }
 .bact { display:flex; align-items:center; gap:9px; padding:11px 18px; border-top:1px solid var(--line2); flex-wrap:wrap; }
 .bact .who { font-size:.76rem; color:var(--ink-soft); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
 .bact .who b { color:var(--ink); font-weight:700; font-size:.86rem; }
@@ -713,10 +747,10 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
 
 <section class="hero wrap" id="hero">
   <h1>Find your space.<br>Meet <span class="hl">your landlord.</span></h1>
-  <p class="sub">Describe what your company needs — we rank every available commercial
-    space in our dataset and the owners behind them, with every score explained. No brokers in between.</p>
+  <p class="sub">Describe what you need — we rank every available space in NYC, and the
+    landlords behind them. Every score explained. No brokers.</p>
   <div class="personas" id="personas"></div>
-  <div class="orline">…or build your own search below — the button always shows how many spaces currently fit.</div>
+  <div class="orline">…or build your own search below.</div>
   <div class="pulse" id="pulse" hidden></div>
 </section>
 
@@ -724,11 +758,11 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
   <aside class="rail">
     <form class="panel" id="f" autocomplete="off" tabindex="-1">
       <div class="step">
-        <h3><span class="n">1</span> What kind of space?</h3>
+        <h3><span class="n">1</span> Type</h3>
         <div class="seg" id="typeseg"></div>
       </div>
       <div class="step">
-        <h3><span class="n">2</span> Where? <span class="opt">pick any number</span></h3>
+        <h3><span class="n">2</span> Where <span class="opt">optional</span></h3>
         <div id="areapills"><div class="pills">
           <span class="sk" style="display:inline-block;width:88px;height:27px;border-radius:999px"></span>
           <span class="sk" style="display:inline-block;width:112px;height:27px;border-radius:999px"></span>
@@ -737,7 +771,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
           <span class="sk" style="display:inline-block;width:64px;height:27px;border-radius:999px"></span>
         </div></div>
         <p class="hint" id="areahint">No areas selected — searching all of NYC.</p>
-        <div class="glabel" style="margin-top:14px">Or near a specific place
+        <div class="glabel" style="margin-top:14px">Or near a place
           <span class="tip" data-t="Anchor on a subway station or any address — like another office you already have. This ADDS to the areas above rather than replacing them: a space counts as close if it's near ANY of your areas OR this point.">?</span>
         </div>
         <div class="anchorwrap">
@@ -747,7 +781,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
         <div class="anchorchiprow" id="anchorchiprow"></div>
       </div>
       <div class="step">
-        <h3><span class="n">3</span> Size, budget & terms <span class="opt">all optional</span></h3>
+        <h3><span class="n">3</span> Size & budget <span class="opt">optional</span></h3>
         <div class="frow">
           <div class="field"><label for="smin">Min sq ft</label><input id="smin" type="number" min="0" placeholder="2,000"></div>
           <div class="field"><label for="smax">Max sq ft</label><input id="smax" type="number" min="0" placeholder="8,000"></div>
@@ -776,13 +810,13 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
         </details>
       </div>
       <div class="step">
-        <h3><span class="n">4</span> Describe the vibe <span class="opt">ranks, never filters</span></h3>
+        <h3><span class="n">4</span> Vibe <span class="opt">optional</span>
+          <span class="tip" data-t="Ranks results, never filters them out. We match by MEANING, not just words — 'sunlit' finds spaces described as having 'excellent natural light'.">?</span></h3>
         <div class="field full">
           <textarea id="q" placeholder="e.g. bright loft with exposed brick, strong foot traffic, near luxury retail…"></textarea>
         </div>
         <div class="chips" id="chips"></div>
-        <p class="hint">We match <b>meaning</b>, not just words — "sunlit" finds spaces described as
-          having "excellent natural light". <span id="backend"></span></p>
+        <p class="hint">Matched by <b>meaning</b>, not just words. <span id="backend"></span></p>
       </div>
     </form>
     <div class="searchdock"><div class="dock">
@@ -830,8 +864,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
       <div class="welcome">
         <div class="big">🏙</div>
         <b>Your ranked results will appear here.</b><br>
-        Pick a persona above or set a couple of filters — then hit
-        <b>Search</b>. Tip: press <kbd>/</kbd> to jump to the vibe box.
+        Pick a persona above, or set a filter and hit <b>Search</b>.
       </div>
     </div>
     <button class="showmore" id="showmore" type="button"></button>
@@ -1942,14 +1975,14 @@ function groupCard(g, i) {
          onload="this.style.opacity=1"
          onerror="this.outerHTML='<div class=&quot;thumb mono&quot;>${monogram(g.building)}</div>'">`
     : `<div class="thumb mono">${monogram(g.building)}</div>`;
-  const first = g.spaces.slice(0, 3), rest = g.spaces.slice(3);
+  const first = g.spaces.slice(0, 1), rest = g.spaces.slice(1);
   const k = favKey(g);
   const addr = cleanAddress(top.address);
   return `<div class="bcard" id="card-${i}" style="animation-delay:${Math.min(i % PAGE, 6) * 55}ms">
     <div class="bmain">
       <button class="fav favtop ${favs[k] ? "on" : ""}" data-favkey="${esc(k)}" title="Save"
         aria-label="${favs[k] ? "Remove from saved" : "Save this building"}" onclick="toggleFav(${i})">♥</button>
-      <div class="thumbwrap">${photo}<span class="rankn">${i + 1}</span></div>
+      <div class="thumbwrap"><div class="thumbclip">${photo}</div><span class="rankn">${i + 1}</span></div>
       <div class="binfo">
         <div class="brow1"><span class="bname">${esc(g.building)}</span></div>
         ${addr ? `<div class="baddr"><span>📍 ${esc(addr)}</span>
@@ -1964,13 +1997,18 @@ function groupCard(g, i) {
           ${top.fit_condition ? `<span class="mchip fit" data-tt="Parsed from this listing's own description text.">${esc(FIT_LOOKUP[top.fit_condition] || top.fit_condition)}</span>` : ""}
           ${top.anchor_distance_mi != null ? `<span class="mchip anchor ttd" data-tt="Straight-line distance to ${esc(top.anchor_label)}, the place you searched near.">📍 ${top.anchor_distance_mi.toFixed(1)} mi from ${esc(top.anchor_label)}</span>` : ""}
         </div>
-        ${signalBars(top.signals, top)}
       </div>
       ${ring(top.score)}
     </div>
     <div class="suites">${first.map(suiteRow).join("")}
-      ${rest.length ? `<details class="moresuites"><summary>${rest.length} more space${rest.length > 1 ? "s" : ""} in this building</summary>${rest.map(suiteRow).join("")}</details>` : ""}</div>
-    <div class="why"><b>Why it's here:</b> ${esc(cleanReason(top.reason))}</div>
+      ${rest.length ? `<details class="moresuites"><summary>${rest.length} more space${rest.length > 1 ? "s" : ""} in this building <span class="chev">▾</span></summary><div>${rest.map(suiteRow).join("")}</div></details>` : ""}</div>
+    <details class="matchdetails">
+      <summary>Why this ranks here <span class="chev">▾</span></summary>
+      <div class="matchbody">
+        ${signalBars(top.signals, top)}
+        <div class="why">${esc(cleanReason(top.reason))}</div>
+      </div>
+    </details>
     <div class="bact">
       <span class="who">${who}</span>
       ${mail ? `<button class="copybtn" data-tt="Copy email address" aria-label="Copy email address" onclick="copyEmail('${mail[1]}')">⧉</button>` : ""}
@@ -2152,11 +2190,16 @@ function llcard(r, i) {
       ${r.style_label ? `<span class="lltag ${r.style_match ? "match" : ""}" ${r.style_match ? `data-tt="Matches your landlord-type preference. This is a small tiebreaker in the ordering — never a ranking driver."` : ""}>${esc(r.style_label)}${r.style_match ? " ✓" : ""}</span>` : ""}
       <span class="lltag" data-tt="${r.contact_tag.startsWith("Ownership") ? "A named person AT the landlord company — you'd be emailing the owner's own leasing team, not a broker." : "This landlord publishes no direct emails; inquiries go through the form on their own site."}">${esc(r.contact_tag)}</span></div>
     <div class="llstat"><b>${r.match_number}</b><span>spaces that fit you ${info(LL_TT.count)}<br>of ${r.n_available} available</span></div>
-    <div class="llsig"><div class="top"><span>Area &amp; type expertise ${info(LL_TT.spec)}</span><span>${specPct}%</span></div>
-      <i class="track"><b style="--w:${specPct}%"></b></i><div class="rsn">${esc(spec.reason)}</div></div>
-    <div class="llsig"><div class="top"><span>Spaces match quality ${info(LL_TT.quality)}</span><span>${strPct === null ? "—" : strPct + "%"}</span></div>
-      <i class="track teal"><b style="--w:${strPct || 0}%"></b></i><div class="rsn">${strReason}</div></div>
-    ${topList}
+    <details class="matchdetails">
+      <summary>See match signals <span class="chev">▾</span></summary>
+      <div class="matchbody">
+        <div class="llsig"><div class="top"><span>Area &amp; type expertise ${info(LL_TT.spec)}</span><span>${specPct}%</span></div>
+          <i class="track"><b style="--w:${specPct}%"></b></i><div class="rsn">${esc(spec.reason)}</div></div>
+        <div class="llsig"><div class="top"><span>Spaces match quality ${info(LL_TT.quality)}</span><span>${strPct === null ? "—" : strPct + "%"}</span></div>
+          <i class="track teal"><b style="--w:${strPct || 0}%"></b></i><div class="rsn">${strReason}</div></div>
+        ${topList}
+      </div>
+    </details>
     <div class="llfoot"><span class="who">${who}</span>${copy}
       <button class="abtn primary" onclick="openLead('l', ${i})">Request Intro</button></div>
   </div>`;
