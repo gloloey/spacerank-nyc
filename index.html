@@ -427,6 +427,21 @@ button:focus-visible, a:focus-visible {
 .mchip.ll { display:inline-flex; align-items:center; gap:5px; background:#0d1729; color:#fff; border-color:#0d1729; font-weight:600; }
 .mchip.ll img { height:11px; display:block; } .mchip.ll .m { font-weight:800; font-size:.62rem; }
 
+/* -------- landlord logo badge: a circular avatar-style mark, reused at
+   different sizes (see llBadge() in JS) — small and pinned over a
+   listing-card's photo corner for quick visual recognition without adding
+   more text, much bigger as the lead element on a landlord card's header. */
+.llbadge {
+  display:inline-flex; align-items:center; justify-content:center; flex:none;
+  border-radius:50%; background:#0d1729; overflow:hidden; box-shadow:var(--shadow-1);
+}
+.llbadge img { width:72%; height:72%; object-fit:contain; }
+.llbadge-m { color:#fff; font-weight:800; font-family:var(--disp); letter-spacing:-.02em; }
+.llbadgewrap {
+  position:absolute; left:-8px; bottom:-8px; z-index:2;
+  border-radius:50%; background:var(--card); padding:3px; box-shadow:var(--shadow-1);
+}
+
 /* score ring */
 .ring { flex:0 0 62px; margin-left:auto; position:relative; width:62px; height:62px; }
 .ring svg { transform:rotate(-90deg); }
@@ -590,7 +605,10 @@ body:has(#comparebar:not([hidden])) .topbtn { bottom:76px; }
    `both` fill-mode, which would silently outrank a plain :hover rule that
    also touched transform (see the longer note on .persona's animation). */
 .llcard:hover { box-shadow:var(--shadow-2); }
-.llhead { display:flex; align-items:center; gap:9px; margin-bottom:11px; flex-wrap:wrap; }
+.llhead { display:flex; align-items:center; gap:12px; margin-bottom:13px; }
+.llheadtext { flex:1; min-width:0; }
+.llname { display:block; font-family:var(--disp); font-weight:700; font-size:1.05rem; letter-spacing:-.015em; line-height:1.2; margin-bottom:5px; }
+.lltags { display:flex; flex-wrap:wrap; gap:6px; }
 .lltag { font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); background:var(--card2); border:1px solid var(--line2); padding:3px 9px; border-radius:999px; }
 .lltag.match { background:var(--teal-soft); border-color:var(--teal); color:var(--teal-ink); }
 .llstat { display:flex; align-items:baseline; gap:10px; margin:4px 0 12px; }
@@ -1037,6 +1055,19 @@ function llchip(name) {
     ? `<img src="${src}" alt="" onerror="this.outerHTML='<span class=m>${monogram(name)}</span>'">`
     : `<span class="m">${monogram(name)}</span>`;
   return `<span class="mchip ll" title="${esc(name)}">${inner}${esc(name)}</span>`;
+}
+/* A standalone, sizeable circular logo badge — same hotlinked-logo /
+   monogram-fallback source as llchip() above, just rendered as its own
+   element instead of glued to the landlord's name, so it can be sized up
+   (landlord cards) or pinned over a photo corner (listing-card thumbnails)
+   without fighting a fixed-height inline chip. */
+function llBadge(name, size) {
+  const src = LOGOS[name];
+  const monoFontSize = Math.round(size * 0.34);
+  const inner = src
+    ? `<img src="${src}" alt="" onerror="this.outerHTML='<span class=&quot;llbadge-m&quot; style=&quot;font-size:${monoFontSize}px&quot;>${monogram(name)}</span>'">`
+    : `<span class="llbadge-m" style="font-size:${monoFontSize}px">${monogram(name)}</span>`;
+  return `<span class="llbadge" style="width:${size}px;height:${size}px" title="${esc(name)}">${inner}</span>`;
 }
 
 /* ---------------- top-of-page progress bar ------------------------------
@@ -1992,7 +2023,8 @@ function groupCard(g, i) {
     <div class="bmain">
       <button class="fav favtop ${favs[k] ? "on" : ""}" data-favkey="${esc(k)}" title="Save"
         aria-label="${favs[k] ? "Remove from saved" : "Save this building"}" onclick="toggleFav(${i})">♥</button>
-      <div class="thumbwrap"><div class="thumbclip">${photo}</div><span class="rankn">${i + 1}</span></div>
+      <div class="thumbwrap"><div class="thumbclip">${photo}</div><span class="rankn">${i + 1}</span>
+        <span class="llbadgewrap">${llBadge(g.landlord, 34)}</span></div>
       <div class="binfo">
         <div class="brow1"><span class="bname">${esc(g.building)}</span></div>
         ${addr ? `<div class="baddr"><span>📍 ${esc(addr)}</span>
@@ -2196,9 +2228,15 @@ function llcard(r, i) {
       ${tops.map(t => `<div class="lltoprow"><b>${esc(t.building)}</b><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.suite)}</span><em class="schip" style="background:color-mix(in srgb, ${scoreCol(t.score)} 14%, transparent); color:${scoreCol(t.score)}">${t.score}</em></div>`).join("")}
     </div>` : "";
   return `<div class="llcard">
-    <div class="llhead">${llchip(r.landlord)}
-      ${r.style_label ? `<span class="lltag ${r.style_match ? "match" : ""}" ${r.style_match ? `data-tt="Matches your landlord-type preference. This is a small tiebreaker in the ordering — never a ranking driver."` : ""}>${esc(r.style_label)}${r.style_match ? " ✓" : ""}</span>` : ""}
-      <span class="lltag" data-tt="${r.contact_tag.startsWith("Ownership") ? "A named person AT the landlord company — you'd be emailing the owner's own leasing team, not a broker." : "This landlord publishes no direct emails; inquiries go through the form on their own site."}">${esc(r.contact_tag)}</span></div>
+    <div class="llhead">${llBadge(r.landlord, 52)}
+      <div class="llheadtext">
+        <b class="llname">${esc(r.landlord)}</b>
+        <div class="lltags">
+          ${r.style_label ? `<span class="lltag ${r.style_match ? "match" : ""}" ${r.style_match ? `data-tt="Matches your landlord-type preference. This is a small tiebreaker in the ordering — never a ranking driver."` : ""}>${esc(r.style_label)}${r.style_match ? " ✓" : ""}</span>` : ""}
+          <span class="lltag" data-tt="${r.contact_tag.startsWith("Ownership") ? "A named person AT the landlord company — you'd be emailing the owner's own leasing team, not a broker." : "This landlord publishes no direct emails; inquiries go through the form on their own site."}">${esc(r.contact_tag)}</span>
+        </div>
+      </div>
+    </div>
     <div class="llstat"><b>${r.match_number}</b><span>spaces that fit you ${info(LL_TT.count)}<br>of ${r.n_available} available</span></div>
     <details class="matchdetails">
       <summary>See match signals <span class="chev">▾</span></summary>
