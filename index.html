@@ -757,6 +757,11 @@ body:has(#comparebar:not([hidden])) .topbtn { bottom:76px; }
 @keyframes toastin { from { opacity:0; transform:translateY(10px); } }
 .foot { border-top:1px solid var(--line2); margin-top:20px; padding:26px 0 40px; font-size:.76rem; color:var(--ink-soft); line-height:1.7; }
 .foot .wrap { display:grid; gap:4px; }
+/* the one actionable line among otherwise-informational footer text —
+   given a touch more weight/contrast so it reads as "you can do
+   something here" rather than blending into the disclosure copy above. */
+.footcontact { color:var(--ink); font-weight:600; margin-top:6px; }
+.footcontact a { font-weight:700; }
 kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; padding:1px 6px; font-size:.68rem; font-family:var(--body); }
 </style>
 </head>
@@ -1019,6 +1024,7 @@ kbd { background:var(--card2); border:1px solid var(--line); border-radius:5px; 
     ownership-side leasing contacts only, never brokers. Missing data is scored neutrally, never faked.</span>
   <span id="backendfoot"></span>
   <span id="pricefoot"></span>
+  <span class="footcontact">✉ Questions or general inquiries — <a href="mailto:info@spaceranknyc.com">info@spaceranknyc.com</a></span>
 </div></footer>
 <script>
 /* =====================================================================
