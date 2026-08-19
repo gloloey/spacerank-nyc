@@ -424,23 +424,20 @@ button:focus-visible, a:focus-visible {
 }
 .bmeta { display:flex; flex-wrap:wrap; gap:6px; margin:7px 0 9px; }
 .mchip { font-size:.7rem; color:var(--ink-soft); background:var(--card2); border:1px solid var(--line2); padding:2.5px 9px; border-radius:999px; }
-.mchip.ll { display:inline-flex; align-items:center; gap:5px; background:#0d1729; color:#fff; border-color:#0d1729; font-weight:600; }
-.mchip.ll img { height:11px; display:block; } .mchip.ll .m { font-weight:800; font-size:.62rem; }
+/* the landlord chip on listing cards — logo sized up well beyond the rest
+   of the meta chips so it's recognizable at a glance, not just a small
+   icon glued to text. */
+.mchip.ll { display:inline-flex; align-items:center; gap:8px; background:#0d1729; color:#fff; border-color:#0d1729; font-weight:600; font-size:.8rem; padding:5px 13px 5px 7px; }
+.mchip.ll img { height:24px; display:block; } .mchip.ll .m { font-weight:800; font-size:.78rem; }
 
-/* -------- landlord logo badge: a circular avatar-style mark, reused at
-   different sizes (see llBadge() in JS) — small and pinned over a
-   listing-card's photo corner for quick visual recognition without adding
-   more text, much bigger as the lead element on a landlord card's header. */
+/* -------- landlord logo badge: a circular avatar-style mark (see
+   llBadge() in JS) — the lead element on a landlord card's header. */
 .llbadge {
   display:inline-flex; align-items:center; justify-content:center; flex:none;
   border-radius:50%; background:#0d1729; overflow:hidden; box-shadow:var(--shadow-1);
 }
 .llbadge img { width:72%; height:72%; object-fit:contain; }
 .llbadge-m { color:#fff; font-weight:800; font-family:var(--disp); letter-spacing:-.02em; }
-.llbadgewrap {
-  position:absolute; left:-8px; bottom:-8px; z-index:2;
-  border-radius:50%; background:var(--card); padding:3px; box-shadow:var(--shadow-1);
-}
 
 /* score ring */
 .ring { flex:0 0 62px; margin-left:auto; position:relative; width:62px; height:62px; }
@@ -2029,8 +2026,7 @@ function groupCard(g, i) {
     <div class="bmain">
       <button class="fav favtop ${favs[k] ? "on" : ""}" data-favkey="${esc(k)}" title="Save"
         aria-label="${favs[k] ? "Remove from saved" : "Save this building"}" onclick="toggleFav(${i})">♥</button>
-      <div class="thumbwrap"><div class="thumbclip">${photo}</div><span class="rankn">${i + 1}</span>
-        <span class="llbadgewrap">${llBadge(g.landlord, 34)}</span></div>
+      <div class="thumbwrap"><div class="thumbclip">${photo}</div><span class="rankn">${i + 1}</span></div>
       <div class="binfo">
         <div class="brow1"><span class="bname">${esc(g.building)}</span></div>
         ${addr ? `<div class="baddr"><span>📍 ${esc(addr)}</span>
